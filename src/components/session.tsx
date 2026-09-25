@@ -1,11 +1,12 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { can as roleCan, USERS, type Permission, type RoleId, type User } from "@/lib/data";
+import { can as roleCan, ROLE_USER, user as getUser, type Permission, type RoleId, type User } from "@/lib/data";
 
 type Theme = "light" | "dark" | "system";
 
 type Session = {
+  /** The person using the app (in the prototype, the one representing the previewed role). */
   user: User;
   /** Prototype only: preview the app as another role. */
   viewAs: RoleId;
@@ -33,8 +34,8 @@ const write = (k: string, v: string) => {
 };
 
 export function SessionProvider({ children }: { children: ReactNode }) {
-  const user = USERS[0];
-  const [viewAs, setViewAsState] = useState<RoleId>(user.role);
+  const [viewAs, setViewAsState] = useState<RoleId>("ceo");
+  const user = getUser(ROLE_USER[viewAs]);
   const [theme, setThemeState] = useState<Theme>("system");
 
   useEffect(() => {

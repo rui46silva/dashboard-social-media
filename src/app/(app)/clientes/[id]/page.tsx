@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { notFound, useParams } from "next/navigation";
 import { useMemo, useState } from "react";
-import { ExternalLink, FileText, Plus } from "lucide-react";
+import { ExternalLink, FileText, Pencil, Plus, Target } from "lucide-react";
 import {
-  COMPANIES, CONTACTS, DEALS, NOW, SITE, SOCIAL, TIME_SLOTS, type Post,
+  COMPANIES, CONTACTS, DEALS, NOW, PROFILES, SITE, SOCIAL, TIME_SLOTS, type Post,
   bestTimes, client as getClient, network, topPosts, user, type NetworkId,
 } from "@/lib/data";
 import { compact, dayMonth, duration, money, num, pct, time } from "@/lib/format";
@@ -14,8 +14,10 @@ import {
   Avatar, CheckCircle, ClientTile, Delta, Due, Kpi, Net, NetIcon, PageHead, PostStatusLozenge, SectionTitle,
 } from "@/components/ui";
 import { useStore } from "@/components/store";
+import { useSession } from "@/components/session";
+import { ClientForm } from "@/components/client-form";
 
-const TABS = ["Visão geral", "Redes sociais", "Site", "Negócio"] as const;
+const TABS = ["Visão geral", "Perfil", "Redes sociais", "Site", "Negócio"] as const;
 type Tab = (typeof TABS)[number];
 const PERIODS = [
   { days: 7, label: "7 dias" },
@@ -35,9 +37,11 @@ export default function ClientPage() {
   const { id } = useParams<{ id: string }>();
   const c = getClient(id);
   const { posts: POSTS, tasks, saveTask } = useStore();
+  const { can } = useSession();
   const [tab, setTab] = useState<Tab>("Visão geral");
   const [days, setDays] = useState(30);
   const [nets, setNets] = useState<NetworkId[]>(c?.networks ?? []);
+  const [editing, setEditing] = useState(false);
 
   const stats = useMemo(() => (SOCIAL[id] ?? []).filter((s) => nets.includes(s.network)), [id, nets]);
   if (!c) notFound();
@@ -73,7 +77,7 @@ export default function ClientPage() {
       <PageHead
         eyebrow={
           <span className="row" style={{ gap: 8 }}>
-            {c.sector} · cliente desde {c.since}
+            {[c.sector, `cliente desde ${c.since}`].filter(Boolean).join(" · ")}
           </span>
         }
         title={
@@ -84,6 +88,11 @@ export default function ClientPage() {
         }
         actions={
           <>
+            {can("gerir_clientes") && (
+              <button className="btn" onClick={() => setEditing(true)}>
+                <Pencil size={15} /> Editar
+              </button>
+            )}
             <Link className="btn" href={`/portal/${c.id}`}>
               <ExternalLink size={15} /> Portal do cliente
             </Link>
@@ -105,7 +114,11 @@ export default function ClientPage() {
         ))}
       </div>
 
-      {tab !== "Negócio" && (
+      {tab === "Perfil" && <ProfileTab clientId={c.id} onEdit={can("gerir_clientes") ? () => setEditing(true) : undefined} />}
+
+      {editing && <ClientForm clientId={c.id} onClose={() => setEditing(false)} />}
+
+      {tab !== "Negócio" && tab !== "Perfil" && (
         <div className="filters">
           <div className="segmented" role="group" aria-label="Período">
             {PERIODS.map((p) => (
@@ -400,6 +413,124 @@ function UpcomingList({ posts }: { posts: Post[] }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function ProfileTab({ clientId, onEdit }: { clientId: string; onEdit?: () => void }) {
+  const c = getClient(clientId)!;
+  const p = PROFILES[clientId];
+  if (!p) return <div className="card empty">Sem perfil. {onEdit && <button className="link" onClick={onEdit}>Preencher agora</button>}</div>;
+  const daysLeft = Math.round((p.end.getTime() - NOW.getTime()) / 864e5);
+  const perHour = p.hoursPerMonth ? p.fee / p.hoursPerMonth : 0;
+  const team = Array.from(new Set([c.manager, c.inboxOwner, ...p.team]));
+  return (
+    <div className="profile-grid">
+      <div className="stack" style={{ gap: 16 }}>
+        <section className="card card__body">
+          <div className="spread" style={{ marginBottom: 8 }}>
+            <div className="eyebrow">Sobre o cliente</div>
+            {onEdit && <button className="link" style={{ fontSize: 13 }} onClick={onEdit}>Editar</button>}
+          </div>
+          <p style={{ fontSize: 15, lineHeight: 1.6 }}>{p.description || <span className="faint">Sem descrição.</span>}</p>
+          <dl className="kv" style={{ marginTop: 14 }}>
+            <dt>Setor</dt><dd>{c.sector || "—"}</dd>
+            <dt>Cidade</dt><dd>{p.city || "—"}</dd>
+            <dt>Site</dt><dd>{c.site || "—"}</dd>
+            <dt>NIF</dt><dd>{p.nif || "—"}</dd>
+          </dl>
+        </section>
+
+        <section className="card card__body">
+          <div className="eyebrow" style={{ marginBottom: 12 }}>Metas</div>
+          <div className="stack" style={{ gap: 16 }}>
+            {p.goals.map((g) => {
+              const r = g.target ? Math.min(1, g.current / g.target) : 0;
+              return (
+                <div key={g.id}>
+                  <div className="spread" style={{ fontSize: 14 }}>
+                    <span className="row" style={{ gap: 6 }}><Target size={15} className="faint" /> {g.label}</span>
+                    <span className="num"><b>{num(g.current)}</b> <span className="faint">/ {num(g.target)}</span></span>
+                  </div>
+                  <div className="progress" style={{ marginTop: 8 }}>
+                    <i style={{ width: `${r * 100}%`, background: r >= 0.8 ? "var(--good-strong)" : "var(--warn)" }} />
+                  </div>
+                  <div className="faint" style={{ fontSize: 12, marginTop: 4 }}>{Math.round(r * 100)}% · até {g.due || "—"}</div>
+                </div>
+              );
+            })}
+            {!p.goals.length && <span className="faint">Sem metas definidas.</span>}
+          </div>
+        </section>
+
+        <section className="card card__body">
+          <div className="eyebrow" style={{ marginBottom: 12 }}>Marca e voz</div>
+          <dl className="kv">
+            <dt>Tom de voz</dt><dd>{p.tone || "—"}</dd>
+            <dt>Público-alvo</dt><dd>{p.audience || "—"}</dd>
+            <dt>Hashtags</dt><dd>{p.hashtags || "—"}</dd>
+            <dt>A evitar</dt><dd>{p.avoid || "—"}</dd>
+            <dt>Concorrentes</dt><dd>{p.competitors || "—"}</dd>
+            <dt>Notas internas</dt><dd>{p.notes || "—"}</dd>
+          </dl>
+        </section>
+      </div>
+
+      <div className="stack" style={{ gap: 16 }}>
+        <section className="card card__body">
+          <div className="eyebrow" style={{ marginBottom: 12 }}>Contrato</div>
+          <div className="big-number">{money(p.fee)}<span className="faint" style={{ fontSize: 15, fontWeight: 500 }}> / mês</span></div>
+          <dl className="kv" style={{ marginTop: 14 }}>
+            <dt>Taxa de arranque</dt><dd>{money(p.setupFee)}</dd>
+            <dt>Início</dt><dd>{p.start.toLocaleDateString("pt-PT")}</dd>
+            <dt>Renovação</dt>
+            <dd>
+              {p.end.toLocaleDateString("pt-PT")}{" "}
+              <span className={daysLeft <= 60 ? "due--late" : daysLeft <= 90 ? "due--soon" : "faint"}>({daysLeft} dias)</span>
+            </dd>
+            <dt>Faturação</dt><dd>Dia {p.billingDay} de cada mês</dd>
+            <dt>Volume</dt><dd>{p.postsPerMonth} publicações · {p.hoursPerMonth} h/mês</dd>
+            <dt>Valor por hora</dt><dd className={perHour && perHour < 30 ? "due--late" : ""}>{perHour ? money(perHour) : "—"}</dd>
+          </dl>
+          <div className="row" style={{ flexWrap: "wrap", gap: 6, marginTop: 14 }}>
+            {p.services.map((sv) => <span key={sv} className="tag">{sv}</span>)}
+          </div>
+        </section>
+
+        <section className="card card__body">
+          <div className="eyebrow" style={{ marginBottom: 12 }}>Equipa</div>
+          <div className="stack" style={{ gap: 10 }}>
+            {team.map((u) => (
+              <div key={u} className="row">
+                <Avatar userId={u} size={26} />
+                <span className="grow">{user(u).name}</span>
+                {u === c.manager && <span className="badge">Gestor de conta</span>}
+                {u === c.inboxOwner && <span className="badge badge--info">Inbox</span>}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="card card__body">
+          <div className="eyebrow" style={{ marginBottom: 12 }}>Contacto principal</div>
+          <div style={{ fontWeight: 600 }}>{p.contact.name || "—"}</div>
+          <div className="faint" style={{ fontSize: 13 }}>{p.contact.role}</div>
+          <div className="muted" style={{ fontSize: 13, marginTop: 8 }}>{p.contact.email}<br />{p.contact.phone}</div>
+        </section>
+
+        <section className="card card__body">
+          <div className="eyebrow" style={{ marginBottom: 12 }}>Contas ligadas</div>
+          <div className="stack" style={{ gap: 8 }}>
+            {c.networks.map((n) => (
+              <div key={n} className="row">
+                <NetIcon id={n} size={20} />
+                <span className="grow">{p.handles[n] || network(n).name}</span>
+                <span className="badge badge--good">Ligada</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

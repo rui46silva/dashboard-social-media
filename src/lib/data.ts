@@ -43,6 +43,8 @@ export type Client = {
   networks: NetworkId[];
   site: string;
   hue: number; // used only for the small avatar tile
+  /** Who answers this client's comments and DMs. */
+  inboxOwner: string;
 };
 
 export const CLIENTS: Client[] = [
@@ -55,6 +57,7 @@ export const CLIENTS: Client[] = [
     networks: ["instagram", "facebook", "linkedin"],
     site: "casalume.pt",
     hue: 38,
+    inboxOwner: "u-rui",
   },
   {
     id: "orvalho",
@@ -65,6 +68,7 @@ export const CLIENTS: Client[] = [
     networks: ["instagram", "facebook", "tiktok"],
     site: "orvalho.pt",
     hue: 15,
+    inboxOwner: "u-tiago",
   },
   {
     id: "kinetik",
@@ -75,6 +79,7 @@ export const CLIENTS: Client[] = [
     networks: ["instagram", "tiktok", "facebook", "linkedin"],
     site: "kinetik.fit",
     hue: 200,
+    inboxOwner: "u-ana",
   },
   {
     id: "atlantico",
@@ -85,6 +90,7 @@ export const CLIENTS: Client[] = [
     networks: ["instagram", "tiktok"],
     site: "atlanticosurf.pt",
     hue: 170,
+    inboxOwner: "u-tiago",
   },
 ];
 export const client = (id: string) => CLIENTS.find((c) => c.id === id);
@@ -205,7 +211,7 @@ export function topPosts(clientId: string): TopPost[] {
     ],
   };
   const kinds = ["Reel", "Carrossel", "Imagem", "Vídeo"];
-  return captions[clientId].map((caption, i) => {
+  return (captions[clientId] ?? []).map((caption, i) => {
     const net = c.networks[i % c.networks.length];
     const reach = Math.round(4000 + r() * 38000);
     return {
@@ -843,7 +849,6 @@ export type ClientResults = {
   headline: string;
   outcomes: { label: string; value: number; hint: string }[];
   estValue: number; // € of business attributed (estimate)
-  goals: { label: string; current: number; target: number; unit?: string }[];
   love: { author: string; network: NetworkId; text: string }[];
   work: { label: string; value: number }[];
 };
@@ -857,10 +862,6 @@ export const RESULTS: Record<string, ClientResults> = {
       { label: "Contactos de arquitetos", value: 4, hint: "potenciais parcerias" },
     ],
     estValue: 9400,
-    goals: [
-      { label: "Seguidores no Instagram", current: 18400, target: 20000 },
-      { label: "Pedidos de orçamento no trimestre", current: 58, target: 60 },
-    ],
     love: [
       { author: "@marta.casa", network: "instagram", text: "Comprei o candeeiro Maré e a sala mudou completamente. Obrigada!" },
       { author: "Atelier Fonte", network: "instagram", text: "Gostávamos de falar sobre uma parceria para um projeto de hotel." },
@@ -877,10 +878,6 @@ export const RESULTS: Record<string, ClientResults> = {
       { label: "Clientes novos (inquérito)", value: 38, hint: "disseram «vi no Instagram»" },
     ],
     estValue: 3850,
-    goals: [
-      { label: "Seguidores no TikTok", current: 21300, target: 25000 },
-      { label: "Encomendas online por mês", current: 47, target: 60 },
-    ],
     love: [
       { author: "@tiago.come.bem", network: "instagram", text: "Melhor centeio de Lisboa, sem discussão." },
       { author: "@ana.lx", network: "tiktok", text: "Vim de propósito de Almada por causa deste vídeo 😍" },
@@ -897,10 +894,6 @@ export const RESULTS: Record<string, ClientResults> = {
       { label: "Empresas interessadas", value: 3, hint: "programa de bem-estar (LinkedIn)" },
     ],
     estValue: 14200,
-    goals: [
-      { label: "Novos sócios no trimestre", current: 51, target: 60 },
-      { label: "Seguidores no TikTok", current: 48900, target: 50000 },
-    ],
     love: [
       { author: "@joao.pfit", network: "tiktok", text: "Fiz o treino de 12 min hoje e as pernas estão a tremer 😅 venha a parte 2" },
       { author: "Helena Brás · Nordia", network: "linkedin", text: "O programa de bem-estar da Kinetik mudou a forma como a nossa equipa encara as pausas." },
@@ -917,10 +910,6 @@ export const RESULTS: Record<string, ClientResults> = {
       { label: "Turistas estrangeiros", value: 18, hint: "reservas em inglês" },
     ],
     estValue: 2870,
-    goals: [
-      { label: "Reservas em outubro", current: 12, target: 40 },
-      { label: "Seguidores no Instagram", current: 8700, target: 10000 },
-    ],
     love: [
       { author: "@sophie.lrnt", network: "instagram", text: "Best surf lesson ever, the instructors were amazing!" },
       { author: "@surf.rita", network: "tiktok", text: "O meu filho não fala de outra coisa desde a aula 🏄" },
@@ -929,4 +918,197 @@ export const RESULTS: Record<string, ClientResults> = {
       { label: "publicações", value: 14 }, { label: "Reels", value: 5 }, { label: "mensagens respondidas", value: 57 }, { label: "vídeo institucional", value: 1 },
     ],
   },
+};
+
+/* ------------------------------------------------------------ Client profile */
+
+export const SERVICES = [
+  "Gestão de redes sociais",
+  "Criação de conteúdo",
+  "Fotografia",
+  "Vídeo e Reels",
+  "Anúncios pagos",
+  "Gestão de comunidade (inbox)",
+  "Relatórios mensais",
+  "Site e SEO",
+  "Email marketing",
+] as const;
+
+export type Goal = { id: string; label: string; current: number; target: number; due: string };
+
+export type ClientProfile = {
+  clientId: string;
+  description: string;
+  city: string;
+  nif: string;
+  contact: { name: string; role: string; email: string; phone: string };
+  fee: number;
+  setupFee: number;
+  start: Date;
+  end: Date;
+  billingDay: number;
+  services: string[];
+  postsPerMonth: number;
+  hoursPerMonth: number;
+  team: string[];
+  handles: Partial<Record<NetworkId, string>>;
+  goals: Goal[];
+  tone: string;
+  audience: string;
+  hashtags: string;
+  avoid: string;
+  competitors: string;
+  notes: string;
+};
+
+export const PROFILES: Record<string, ClientProfile> = {
+  "casa-lume": {
+    clientId: "casa-lume",
+    description: "Loja de iluminação e decoração com peças de autor portuguesas. Vende online e no showroom de Lisboa; quer crescer no segmento de arquitetos e hotelaria.",
+    city: "Lisboa", nif: "514 882 031",
+    contact: { name: "Sofia Mendes", role: "Diretora de marketing", email: "sofia@casalume.pt", phone: "+351 912 345 118" },
+    fee: 1450, setupFee: 600, start: new Date(2024, 2, 1), end: daysFromNow(160), billingDay: 1,
+    services: ["Gestão de redes sociais", "Criação de conteúdo", "Fotografia", "Vídeo e Reels", "Gestão de comunidade (inbox)", "Relatórios mensais"],
+    postsPerMonth: 16, hoursPerMonth: 38, team: ["u-rui", "u-ana", "u-ines"],
+    handles: { instagram: "@casalume", facebook: "Casa Lume", linkedin: "Casa Lume Lda" },
+    goals: [
+      { id: "g1", label: "Seguidores no Instagram", current: 18400, target: 20000, due: "dez 2026" },
+      { id: "g2", label: "Pedidos de orçamento no trimestre", current: 58, target: 60, due: "dez 2026" },
+    ],
+    tone: "Acolhedor, próximo, com gosto pelo detalhe. Tratar por «tu» no Instagram, «você» no LinkedIn.",
+    audience: "Casais 28–45 a mobilar casa; arquitetos e designers de interiores.",
+    hashtags: "#casalume #iluminacao #designportugues #decoracao",
+    avoid: "Promoções agressivas, «barato», fotos com luz fria.",
+    competitors: "@luminastore.pt, @oficinadaluz, @nortedesign",
+    notes: "Aprovações sempre pela Sofia. Lançamentos de coleção em março e outubro.",
+  },
+  orvalho: {
+    clientId: "orvalho",
+    description: "Padaria de fermentação lenta em Campo de Ourique, com encomendas para eventos. Objetivo: encher os sábados e crescer nas encomendas online.",
+    city: "Lisboa", nif: "516 204 778",
+    contact: { name: "Filipa Costa", role: "Sócia-gerente", email: "filipa@orvalho.pt", phone: "+351 913 882 040" },
+    fee: 900, setupFee: 0, start: new Date(2025, 0, 15), end: daysFromNow(62), billingDay: 15,
+    services: ["Gestão de redes sociais", "Criação de conteúdo", "Vídeo e Reels", "Gestão de comunidade (inbox)"],
+    postsPerMonth: 18, hoursPerMonth: 34, team: ["u-tiago", "u-ines"],
+    handles: { instagram: "@padariaorvalho", facebook: "Padaria Orvalho", tiktok: "@padariaorvalho" },
+    goals: [
+      { id: "g1", label: "Seguidores no TikTok", current: 21300, target: 25000, due: "dez 2026" },
+      { id: "g2", label: "Encomendas online por mês", current: 47, target: 60, due: "nov 2026" },
+    ],
+    tone: "Caseiro, bem-disposto, bairro. Mostrar as mãos e o forno.",
+    audience: "Moradores de Campo de Ourique e Estrela; foodies de Lisboa 25–40.",
+    hashtags: "#orvalho #massamae #paolisboa",
+    avoid: "Fotos de estúdio, filtros fortes.",
+    competitors: "@fornodobairro, @massamadre.lx",
+    notes: "Publicar às 8h ao sábado. A Filipa responde melhor por WhatsApp.",
+  },
+  kinetik: {
+    clientId: "kinetik",
+    description: "Ginásio boutique no Porto com aulas de grupo e um programa de bem-estar para empresas.",
+    city: "Porto", nif: "515 330 912",
+    contact: { name: "Marco Teixeira", role: "CEO", email: "marco@kinetik.fit", phone: "+351 936 101 772" },
+    fee: 2100, setupFee: 900, start: new Date(2023, 8, 1), end: daysFromNow(240), billingDay: 1,
+    services: ["Gestão de redes sociais", "Criação de conteúdo", "Vídeo e Reels", "Anúncios pagos", "Gestão de comunidade (inbox)", "Relatórios mensais"],
+    postsPerMonth: 24, hoursPerMonth: 52, team: ["u-ana", "u-tiago", "u-ines"],
+    handles: { instagram: "@kinetik.fit", tiktok: "@kinetik.fit", facebook: "Kinetik Fitness", linkedin: "Kinetik Fitness" },
+    goals: [
+      { id: "g1", label: "Novos sócios no trimestre", current: 51, target: 60, due: "dez 2026" },
+      { id: "g2", label: "Seguidores no TikTok", current: 48900, target: 50000, due: "out 2026" },
+    ],
+    tone: "Energético mas sem culpa. Treino acessível, pessoas reais.",
+    audience: "25–45, Porto, pouco tempo para treinar; RH de empresas tech.",
+    hashtags: "#kinetik #treinoporto #bemestar",
+    avoid: "Corpos «perfeitos», antes/depois de peso.",
+    competitors: "@pulsegym.pt, @estudiocore",
+    notes: "",
+  },
+  atlantico: {
+    clientId: "atlantico",
+    description: "Escola de surf na Ericeira para famílias, crianças e turistas. Época alta de maio a outubro.",
+    city: "Ericeira", nif: "517 008 455",
+    contact: { name: "Nuno Ferraz", role: "Fundador", email: "nuno@atlanticosurf.pt", phone: "+351 918 554 309" },
+    fee: 750, setupFee: 300, start: new Date(2025, 5, 1), end: daysFromNow(45), billingDay: 1,
+    services: ["Gestão de redes sociais", "Criação de conteúdo", "Vídeo e Reels"],
+    postsPerMonth: 14, hoursPerMonth: 31, team: ["u-tiago", "u-ines"],
+    handles: { instagram: "@atlanticosurf", tiktok: "@atlanticosurf" },
+    goals: [
+      { id: "g1", label: "Reservas em outubro", current: 12, target: 40, due: "out 2026" },
+      { id: "g2", label: "Seguidores no Instagram", current: 8700, target: 10000, due: "dez 2026" },
+    ],
+    tone: "Descontraído, seguro, em PT e EN.",
+    audience: "Famílias da Grande Lisboa; turistas europeus 20–35.",
+    hashtags: "#ericeira #surfschool #atlanticosurf",
+    avoid: "Imagens de risco sem instrutor.",
+    competitors: "@ericeirawaves, @saltsurfcamp",
+    notes: "Avença abaixo do esforço real — rever na renovação.",
+  },
+};
+
+/**
+ * Adds or updates a client in every in-memory table the prototype reads, so a
+ * client created in the form shows up in CRM, lists and its dedicated page.
+ * In production this is one insert/update in Supabase.
+ */
+export function upsertClient(base: Client, profile: ClientProfile) {
+  const existing = CLIENTS.findIndex((c) => c.id === base.id);
+  if (existing >= 0) CLIENTS[existing] = base;
+  else CLIENTS.push(base);
+  PROFILES[base.id] = profile;
+
+  // A prospect that signs becomes the client's company record (keeps its deals and contacts).
+  const co =
+    COMPANIES.find((c) => c.clientId === base.id) ??
+    COMPANIES.find((c) => !c.clientId && c.name.toLowerCase() === base.name.toLowerCase());
+  const coId = co?.id ?? `co-${base.id}`;
+  const coData: Company = { id: coId, name: base.name, sector: base.sector, city: profile.city, status: "cliente", owner: base.manager, clientId: base.id, mrr: profile.fee };
+  if (co) Object.assign(co, coData);
+  else COMPANIES.push(coData);
+
+  const ct = CONTACTS.find((c) => c.companyId === coId);
+  const ctData: Contact = { id: ct?.id ?? `c-${base.id}`, name: profile.contact.name, role: profile.contact.role, companyId: coId, email: profile.contact.email, phone: profile.contact.phone, lastTouch: ct?.lastTouch ?? NOW, source: ct?.source ?? "Novo cliente" };
+  if (ct) Object.assign(ct, ctData);
+  else if (profile.contact.name) CONTACTS.push(ctData);
+
+  const ec = CLIENT_ECONOMICS.find((e) => e.clientId === base.id);
+  const ecData = { clientId: base.id, fee: profile.fee, hours: profile.hoursPerMonth, contractEnd: profile.end };
+  if (ec) Object.assign(ec, ecData);
+  else CLIENT_ECONOMICS.push(ecData);
+
+  // Empty analytics until the accounts finish importing.
+  const zeros = () => Array.from({ length: 30 }, () => 0);
+  const have = new Set((SOCIAL[base.id] ?? []).map((s) => s.network));
+  SOCIAL[base.id] = [
+    ...(SOCIAL[base.id] ?? []).filter((s) => base.networks.includes(s.network)),
+    ...base.networks.filter((n) => !have.has(n)).map((n) => ({
+      network: n, followers: 0, followersDelta: 0, reach: 0, impressions: 0, engagementRate: 0, engagementDelta: 0, posts: 0, clicks: 0,
+      reachSeries: zeros(), followerSeries: zeros(),
+    })),
+  ];
+  SITE[base.id] ??= {
+    sessions: 0, sessionsDelta: 0, users: 0, engagedRate: 0, avgDuration: 0, conversions: 0, conversionsDelta: 0, sessionSeries: zeros(),
+    sources: ["Pesquisa orgânica", "Redes sociais", "Direto", "Referências", "Pago"].map((label) => ({ label, value: 0 })),
+    pages: [],
+  };
+  COMPETITORS[base.id] ??= [{ name: base.name, handle: profile.handles.instagram ?? "", followers: 0, growth: 0, engagement: 0, postsPerWeek: 0, topPost: "—", isClient: true }];
+  RESULTS[base.id] ??= {
+    headline: "Primeiro mês connosco — os resultados aparecem aqui assim que as contas forem importadas.",
+    outcomes: [
+      { label: "Contactos recebidos", value: 0, hint: "mensagens e formulários" },
+      { label: "Visitas ao site", value: 0, hint: "vindas das redes" },
+      { label: "Novos seguidores", value: 0, hint: "em todas as redes" },
+    ],
+    estValue: 0,
+    love: [],
+    work: [{ label: "publicações previstas por mês", value: profile.postsPerMonth }],
+  };
+}
+
+/** Prototype: each role is previewed through one representative person. */
+export const ROLE_USER: Record<RoleId, string> = {
+  ceo: "u-rui",
+  rh: "u-sara",
+  dev: "u-pedro",
+  gestor: "u-ana",
+  designer: "u-ines",
+  cliente: "u-marco",
 };

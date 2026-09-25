@@ -27,20 +27,23 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { CLIENTS, INBOX, NOW, ROLES, type Permission } from "@/lib/data";
+import { CLIENTS, INBOX, NOW, ROLES, ROLE_USER, user as getUser, type Permission } from "@/lib/data";
 import { avatarColor, ClientTile } from "./ui";
 import { useSession } from "./session";
 import { useStore } from "./store";
 
 type NavItem = { href: string; label: string; icon: LucideIcon; perm?: Permission; count?: number; alert?: boolean };
 
-const unread = INBOX.filter((m) => m.unread).length;
+/** Unread comments/DMs for the clients this person answers. */
+const unreadFor = (userId: string) =>
+  INBOX.filter((m) => m.unread && CLIENTS.find((c) => c.id === m.clientId)?.inboxOwner === userId).length;
 
 function useGroups(): { label: string; items: NavItem[] }[] {
   const { posts, tasks } = useStore();
   const { user } = useSession();
   const endOfTomorrow = new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() + 2);
   const myDue = tasks.filter((t) => !t.done && t.assignee === user.id && t.due && t.due < endOfTomorrow).length;
+  const unread = unreadFor(user.id);
   const toReview = posts.filter((p) => p.status === "confirmar" || (p.status === "todo" && p.rounds > 0)).length;
   return [
     {
@@ -306,9 +309,17 @@ function Crumbs() {
 
 export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { viewAs, can, user } = useSession();
+  const unread = unreadFor(user.id);
   const [sheet, setSheet] = useState(false);
   const [palette, setPalette] = useState(false);
+
+  // Clients never see the agency workspace — only their own portal.
+  const clientPortal = `/portal/${getUser(ROLE_USER.cliente).clients[0]}`;
+  useEffect(() => {
+    if (viewAs === "cliente") router.replace(clientPortal);
+  }, [viewAs, clientPortal, router]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -329,6 +340,14 @@ export function Shell({ children }: { children: ReactNode }) {
   ];
   const visibleTabs = tabs.filter((t) => !t.perm || can(t.perm)).slice(0, 4);
   while (visibleTabs.length < 4) visibleTabs.push({ href: "/clientes", label: "Clientes", icon: BriefcaseBusiness });
+
+  if (viewAs === "cliente") {
+    return (
+      <main className="main empty" style={{ paddingTop: "20vh" }}>
+        A abrir o portal do cliente…
+      </main>
+    );
+  }
 
   return (
     <div className="shell">
@@ -374,7 +393,7 @@ export function Shell({ children }: { children: ReactNode }) {
             {unread > 0 && <span className="dot" />}
           </Link>
           <span className="avatar" style={{ ["--size" as string]: "30px", ["--av" as string]: avatarColor(user.name) }} title={user.name}>
-            RS
+            {user.name.split(" ").map((p) => p[0]).slice(0, 2).join("")}
           </span>
         </header>
 
@@ -384,12 +403,6 @@ export function Shell({ children }: { children: ReactNode }) {
             <span>
               Estás a ver a Mesa como <strong>{ROLES.find((r) => r.id === viewAs)?.name}</strong>. Os menus e as ações
               mudam conforme as permissões do papel.
-              {viewAs === "cliente" && (
-                <>
-                  {" "}
-                  Os clientes entram diretamente no <Link href="/portal/kinetik" className="link">portal</Link>.
-                </>
-              )}
             </span>
           </div>
         )}

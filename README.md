@@ -19,10 +19,10 @@ npm run typecheck
 |---|---|---|
 | Início | `/` | As minhas tarefas (próximas, atrasadas, concluídas), aprovações de conteúdo, publicações de hoje e amanhã, alertas e renovações |
 | Aprovações | `/conteudo` | Fluxo de aprovação de posts e Reels pelo cliente (ver abaixo) |
-| Clientes | `/clientes` | Lista de marcas com números de 30 dias; adicionar cliente e ligar contas |
-| Cliente | `/clientes/[id]` | Separadores **Visão geral · Redes sociais · Site · Negócio**; filtros por período e por rede; melhores horas; melhores publicações |
+| Clientes | `/clientes` | Lista de marcas; **novo cliente** em 5 passos (cliente e contacto, contrato e serviços, equipa e redes, metas, marca e voz), que alimenta o CRM, a página do cliente e o portal |
+| Cliente | `/clientes/[id]` | Separadores **Visão geral · Perfil · Redes sociais · Site · Negócio**; o Perfil mostra descrição, contrato, metas, equipa, contacto e guia de marca, com edição |
 | Calendário | `/calendario` | Vista de mês (arrastar para mudar o dia) e lista no telemóvel; compositor com pré-visualização e limites de caracteres |
-| Inbox | `/inbox` | Comentários, mensagens e menções unificados; respostas rápidas, atribuir, resolver |
+| Inbox | `/inbox` | Cada cliente tem um **responsável pela inbox**: cada pessoa só vê as conversas dos seus clientes (o CEO pode ver a equipa toda). Respostas rápidas, passar a outra pessoa, resolver |
 | Concorrentes | `/concorrentes` | Comparação de envolvimento, crescimento e ritmo de publicação |
 | Relatórios | `/relatorios` | Construtor de relatórios com pré-visualização, exportação em PDF (impressão) e envio automático |
 | Pipeline | `/crm/pipeline` | Kanban de negócios com arrastar e largar, valor ponderado e taxa de ganho |
@@ -30,7 +30,7 @@ npm run typecheck
 | Tarefas | `/tarefas` | Estilo Asana: lista com secções, quadro e calendário; painel de detalhe com responsável, prazo, prioridade, descrição, subtarefas, comentários e gostos |
 | Empresa | `/empresa` | **Só CEO.** Receita vs. custos, break-even interativo, cenários a 12 meses, rentabilidade por cliente, CAC/LTV e alertas de risco |
 | Equipa e papéis | `/equipa` | Pessoas, convites e matriz de permissões por papel |
-| Portal do cliente | `/portal/[id]` | Pensado para o cliente: resultados em linguagem de negócio (contactos, reservas, valor gerado), aprovação de posts, melhores momentos, o que dizem da marca, objetivos e trabalho feito |
+| Portal do cliente | `/portal/[id]` | Pré-visualização realista de cada post por rede (Instagram, Facebook, TikTok, LinkedIn) e do **feed do cliente** com os posts novos já encaixados. Pensado para o cliente: resultados em linguagem de negócio (contactos, reservas, valor gerado), aprovação de posts, melhores momentos, o que dizem da marca, objetivos e trabalho feito |
 
 ### Fluxo de aprovação de conteúdo
 
@@ -43,7 +43,7 @@ Em produção ──enviar──▶ Com o cliente (UAT) ──aprova──▶ Ap
 
 O cliente aprova ou pede alterações no portal. No protótipo o estado fica guardado no browser (`localStorage`): aprova no portal e vês o resultado em `/conteudo` e `/tarefas`. O botão «Repor dados de demonstração» na barra lateral volta ao início.
 
-**Papéis:** CEO (acesso total), RH, Dev, Gestor de conta, Designer e Cliente. Só **CEO, RH e Dev** podem convidar pessoas e mudar papéis. No protótipo, o seletor **«Ver como»** (barra lateral ou menu «Mais» no telemóvel) mostra como a app fica para cada papel.
+**Papéis:** CEO (acesso total), RH, Dev, Gestor de conta, Designer e Cliente. Só **CEO, RH e Dev** podem convidar pessoas e mudar papéis. O papel **Cliente só acede ao portal da sua marca**: qualquer página da Mesa redireciona para lá. No protótipo, o seletor **«Ver como»** (barra lateral ou menu «Mais» no telemóvel) mostra como a app fica para cada papel.
 
 ## Decisões de design
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { NOW, POSTS, TASKS, client as getClient, type Post, type PostComment, type Task } from "@/lib/data";
+import { NOW, POSTS, PROFILES, TASKS, client as getClient, upsertClient, type Client, type ClientProfile, type Post, type PostComment, type Task } from "@/lib/data";
 
 /**
  * Prototype data store. Posts and tasks live here so a change made in one
@@ -20,8 +20,13 @@ type Store = {
   reopenPost: (id: string, by?: string) => void;
   saveTask: (t: Task) => void;
   addTask: (t: Partial<Task> & { title: string }) => Task;
+  /** Clients created or edited in this browser (seed clients are in data.ts). */
+  savedClients: { base: Client; profile: ClientProfile }[];
+  saveClient: (base: Client, profile: ClientProfile) => void;
   reset: () => void;
 };
+
+type SavedClient = { base: Client; profile: ClientProfile };
 
 const Ctx = createContext<Store | null>(null);
 const KEY = "mesa:store:v2";
@@ -29,18 +34,14 @@ const KEY = "mesa:store:v2";
 const isoRe = /^\d{4}-\d{2}-\d{2}T/;
 const revive = (_: string, v: unknown) => (typeof v === "string" && isoRe.test(v) ? new Date(v) : v);
 
-const CONTACT: Record<string, string> = {
-  "casa-lume": "Sofia Mendes",
-  orvalho: "Filipa Costa",
-  kinetik: "Marco Teixeira",
-  atlantico: "Nuno Ferraz",
-};
+const contactName = (clientId: string) => PROFILES[clientId]?.contact.name || "Cliente";
 
 const USER_NAME: Record<string, string> = { "u-rui": "Rui Silva" };
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [posts, setPosts] = useState<Post[]>(POSTS);
   const [tasks, setTasks] = useState<Task[]>(TASKS);
+  const [savedClients, setSavedClients] = useState<SavedClient[]>([]);
   // Only write back once stored data has been read, or the seed would overwrite it.
   const [hydrated, setHydrated] = useState(false);
 
@@ -51,6 +52,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const data = JSON.parse(raw, revive);
         if (Array.isArray(data.posts)) setPosts(data.posts);
         if (Array.isArray(data.tasks)) setTasks(data.tasks);
+        if (Array.isArray(data.clients)) {
+          (data.clients as SavedClient[]).forEach((c) => upsertClient(c.base, c.profile));
+          setSavedClients(data.clients);
+        }
       }
     } catch {
       /* corrupted or blocked storage — keep the seed data */
@@ -71,9 +76,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!hydrated) return;
     try {
-      localStorage.setItem(KEY, JSON.stringify({ posts, tasks }));
+      localStorage.setItem(KEY, JSON.stringify({ posts, tasks, clients: savedClients }));
     } catch {}
-  }, [posts, tasks, hydrated]);
+  }, [posts, tasks, savedClients, hydrated]);
 
   const patchPost = useCallback((id: string, fn: (p: Post) => Post) => {
     setPosts((ps) => ps.map((p) => (p.id === id ? fn(p) : p)));
@@ -118,7 +123,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       patchPost(id, (p) => ({
         ...p,
         status: "confirmar",
-        comments: [...p.comments, { by: "cliente", name: CONTACT[p.clientId], text: text?.trim() || "Aprovado.", date: new Date(), kind: "feedback" }],
+        comments: [...p.comments, { by: "cliente", name: contactName(p.clientId), text: text?.trim() || "Aprovado.", date: new Date(), kind: "feedback" }],
       })),
     clientReject: (id, text) => {
       const p = posts.find((x) => x.id === id);
@@ -126,7 +131,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ...x,
         status: "todo",
         rounds: x.rounds + 1,
-        comments: [...x.comments, { by: "cliente", name: CONTACT[x.clientId], text, date: new Date(), kind: "feedback" }],
+        comments: [...x.comments, { by: "cliente", name: contactName(x.clientId), text, date: new Date(), kind: "feedback" }],
       }));
       if (p) {
         addTask({
@@ -136,7 +141,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           due: new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() + 1, 12),
           priority: "alta",
           tags: ["conteúdo", "alterações"],
-          description: `${CONTACT[p.clientId]} (${getClient(p.clientId)!.name}) pediu alterações:\n\n«${text}»\n\nCorrigir e voltar a enviar para aprovação.`,
+          description: `${contactName(p.clientId)} (${getClient(p.clientId)!.name}) pediu alterações:\n\n«${text}»\n\nCorrigir e voltar a enviar para aprovação.`,
         });
       }
     },
@@ -146,13 +151,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       patchPost(id, (p) => ({ ...p, status: "todo", comments: [...p.comments, note("Voltou para produção.", by)] })),
     saveTask: (t) => setTasks((ts) => ts.map((x) => (x.id === t.id ? t : x))),
     addTask,
+    savedClients,
+    saveClient: (base, profile) => {
+      upsertClient(base, profile);
+      setSavedClients((cs) => [...cs.filter((c) => c.base.id !== base.id), { base, profile }]);
+    },
     reset: () => {
-      setPosts(POSTS);
-      setTasks(TASKS);
+      try {
+        localStorage.removeItem(KEY);
+      } catch {}
+      window.location.reload();
     },
   };
 
-  return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
+  // Saved clients are merged into the in-memory tables on load, so render only
+  // after that — otherwise server and browser HTML would disagree.
+  return <Ctx.Provider value={store}>{hydrated ? children : null}</Ctx.Provider>;
 }
 
 export function useStore() {

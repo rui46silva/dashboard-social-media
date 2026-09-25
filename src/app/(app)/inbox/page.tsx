@@ -2,10 +2,11 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, CheckCheck, ListPlus, MessageCircle, Send, AtSign, MessageSquare } from "lucide-react";
+import { ArrowLeft, CheckCheck, ListPlus, MessageCircle, Send, AtSign, MessageSquare, UserRound } from "lucide-react";
 import { CLIENTS, INBOX, NOW, USERS, client as getClient, network, type InboxItem } from "@/lib/data";
 import { ago, time } from "@/lib/format";
-import { ClientTile, NetIcon, PageHead, PersonAvatar } from "@/components/ui";
+import { Avatar, ClientTile, NetIcon, PageHead, PersonAvatar } from "@/components/ui";
+import { useSession } from "@/components/session";
 
 const SAVED_REPLIES = [
   "Olá! Obrigado pela mensagem. Vamos verificar e respondemos já por mensagem privada.",
@@ -15,6 +16,7 @@ const SAVED_REPLIES = [
 
 const KIND_ICON = { comentário: MessageCircle, mensagem: MessageSquare, menção: AtSign };
 type Filter = "todas" | "por ler" | "negativas";
+type Scope = "minhas" | "equipa";
 
 export default function InboxPage() {
   return (
@@ -26,6 +28,9 @@ export default function InboxPage() {
 
 function Inbox() {
   const params = useSearchParams();
+  const { user: me, viewAs } = useSession();
+  const supervisor = viewAs === "ceo";
+  const [scope, setScope] = useState<Scope>("minhas");
   const [items, setItems] = useState<InboxItem[]>(INBOX);
   const [filter, setFilter] = useState<Filter>("todas");
   const [clientId, setClientId] = useState<string | null>(null);
@@ -39,15 +44,22 @@ function Inbox() {
     if (m) setSelected(m);
   }, [params]);
 
+  // Each client's comments and DMs go to one person (set on the client page);
+  // a message can also be handed over to someone else.
+  const ownerOf = (m: InboxItem) => assignee[m.id] || getClient(m.clientId)!.inboxOwner;
+  const myClients = CLIENTS.filter((c) => c.inboxOwner === me.id);
+  const inScope = (m: InboxItem) => (scope === "equipa" && supervisor) || ownerOf(m) === me.id;
+
   const list = useMemo(
     () =>
       items.filter(
         (m) =>
+          inScope(m) &&
           !resolved.includes(m.id) &&
           (!clientId || m.clientId === clientId) &&
           (filter === "todas" || (filter === "por ler" ? m.unread : m.sentiment === "negativo")),
       ),
-    [items, filter, clientId, resolved],
+    [items, filter, clientId, resolved, scope, assignee, me.id, supervisor],
   );
 
   const current = items.find((m) => m.id === selected);
@@ -70,13 +82,27 @@ function Inbox() {
     setDraft("");
   };
 
-  const unreadCount = items.filter((m) => m.unread && !resolved.includes(m.id)).length;
+  const unreadCount = items.filter((m) => inScope(m) && m.unread && !resolved.includes(m.id)).length;
 
   return (
     <>
       <PageHead
         title="Inbox"
-        lede="Comentários, mensagens e menções de todas as redes e clientes num só sítio."
+        lede={
+          scope === "equipa" && supervisor
+            ? "Todas as conversas da agência, com o responsável de cada uma."
+            : myClients.length
+              ? <>Recebes os comentários e mensagens de <strong>{myClients.map((c) => c.name).join(", ")}</strong>. O responsável muda-se na página de cada cliente.</>
+              : "Ainda não tens clientes atribuídos para responder."
+        }
+        actions={
+          supervisor && (
+            <div className="segmented" role="group" aria-label="Âmbito">
+              <button aria-pressed={scope === "minhas"} onClick={() => setScope("minhas")}>As minhas</button>
+              <button aria-pressed={scope === "equipa"} onClick={() => setScope("equipa")}>Toda a equipa</button>
+            </div>
+          )
+        }
       />
 
       <div className="inbox">
@@ -96,7 +122,7 @@ function Inbox() {
               aria-label="Filtrar por cliente"
             >
               <option value="">Todos os clientes</option>
-              {CLIENTS.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              {(scope === "equipa" && supervisor ? CLIENTS : myClients).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="list">
@@ -124,12 +150,15 @@ function Inbox() {
                     <div className="row faint" style={{ fontSize: 12, marginTop: 6 }}>
                       <Icon size={13} /> {m.kind} · <ClientTile clientId={m.clientId} size={14} /> {getClient(m.clientId)!.name}
                       {m.sentiment === "negativo" && <span className="badge badge--bad" style={{ height: 18, marginLeft: "auto" }}>negativo</span>}
+                      {scope === "equipa" && supervisor && (
+                        <span style={{ marginLeft: m.sentiment === "negativo" ? 0 : "auto" }}><Avatar userId={ownerOf(m)} size={18} /></span>
+                      )}
                     </div>
                   </div>
                 </button>
               );
             })}
-            {!list.length && <div className="empty">Inbox limpa. Bom trabalho.</div>}
+            {!list.length && <div className="empty">{myClients.length || scope === "equipa" ? "Inbox limpa. Bom trabalho." : "Nada para ti — não és responsável pela inbox de nenhum cliente."}</div>}
           </div>
         </div>
 
@@ -195,15 +224,20 @@ function Inbox() {
                 </label>
                 <div className="spread" style={{ flexWrap: "wrap" }}>
                   <div className="row">
+                    <UserRound size={15} className="faint" />
                     <select
                       className="input"
                       style={{ width: "auto", height: 30 }}
-                      value={assignee[current.id] ?? ""}
+                      value={ownerOf(current)}
                       onChange={(e) => setAssignee((a) => ({ ...a, [current.id]: e.target.value }))}
-                      aria-label="Atribuir a"
+                      aria-label="Responsável por esta conversa"
+                      title="Passar esta conversa a outra pessoa"
                     >
-                      <option value="">Atribuir a…</option>
-                      {USERS.filter((u) => u.role !== "cliente").map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      {USERS.filter((u) => u.role !== "cliente").map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name}{u.id === getClient(current.clientId)!.inboxOwner ? " (responsável do cliente)" : ""}
+                        </option>
+                      ))}
                     </select>
                     <button className="btn btn--sm btn--ghost" title="Criar tarefa a partir desta conversa">
                       <ListPlus size={14} /> Tarefa

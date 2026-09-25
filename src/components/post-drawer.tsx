@@ -8,7 +8,8 @@ import {
   type NetworkId, type Post, type PostStatus,
 } from "@/lib/data";
 import { ago } from "@/lib/format";
-import { Avatar, ClientTile, NetIcon, PersonAvatar, PostStatusLozenge, PostThumb } from "./ui";
+import { Avatar, PersonAvatar, PostStatusLozenge } from "./ui";
+import { PreviewSwitcher } from "./social-preview";
 import { useSession } from "./session";
 import { useStore } from "./store";
 
@@ -179,18 +180,9 @@ export function PostDrawer({
           </label>
 
           <div>
-            <div className="eyebrow" style={{ marginBottom: 8 }}>Pré-visualização</div>
+            <div className="eyebrow" style={{ marginBottom: 8 }}>Como vai aparecer</div>
             <div className="preview-phone">
-              <div className="row">
-                <ClientTile clientId={clientId} size={28} />
-                <div className="grow">
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{c.name}</div>
-                  <div className="faint" style={{ fontSize: 11 }}>{new Date(when).toLocaleString("pt-PT", { dateStyle: "medium", timeStyle: "short" })}</div>
-                </div>
-                <div className="row" style={{ gap: 3 }}>{networks.map((n) => <NetIcon key={n} id={n} size={16} />)}</div>
-              </div>
-              <PostThumb post={{ id: live?.id ?? "novo", clientId, kind }} />
-              <p style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>{caption || <span className="faint">A legenda aparece aqui.</span>}</p>
+              <PreviewSwitcher post={{ ...draft(live?.status ?? "todo"), caption: caption || "A legenda aparece aqui." }} />
             </div>
           </div>
 

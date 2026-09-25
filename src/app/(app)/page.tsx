@@ -31,8 +31,10 @@ export default function Home() {
   const agenda = posts
     .filter((p) => sameDay(p.date, NOW) || sameDay(p.date, tomorrow))
     .sort((a, b) => a.date.getTime() - b.date.getTime());
-  const unread = INBOX.filter((m) => m.unread);
-  const negative = INBOX.filter((m) => m.sentiment === "negativo" && m.unread);
+  // Only the conversations this person is responsible for.
+  const myInbox = INBOX.filter((m) => client(m.clientId)?.inboxOwner === me.id);
+  const unread = myInbox.filter((m) => m.unread);
+  const negative = myInbox.filter((m) => m.sentiment === "negativo" && m.unread);
   const withClient = posts.filter((p) => p.status === "uat");
   const toConfirm = posts.filter((p) => p.status === "confirmar");
   const rejected = posts.filter((p) => p.status === "todo" && p.rounds > 0);
