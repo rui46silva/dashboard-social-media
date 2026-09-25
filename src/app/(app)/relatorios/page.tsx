@@ -204,7 +204,7 @@ export default function ReportsPage() {
             {has("notas") && notes && (
               <>
                 <h3>Notas e próximos passos</h3>
-                <p className="serif" style={{ fontSize: 17, lineHeight: 1.55 }}>{notes}</p>
+                <p style={{ fontSize: 15, lineHeight: 1.6 }}>{notes}</p>
               </>
             )}
           </article>

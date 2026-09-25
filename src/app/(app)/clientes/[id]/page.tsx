@@ -5,14 +5,15 @@ import { notFound, useParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { ExternalLink, FileText, Plus } from "lucide-react";
 import {
-  COMPANIES, CONTACTS, DEALS, NOW, POSTS, SITE, SOCIAL, TASKS, TIME_SLOTS,
+  COMPANIES, CONTACTS, DEALS, NOW, SITE, SOCIAL, TIME_SLOTS, type Post,
   bestTimes, client as getClient, network, topPosts, user, type NetworkId,
 } from "@/lib/data";
 import { compact, dayMonth, duration, money, num, pct, time } from "@/lib/format";
 import { Bars, Heatmap, LineChart } from "@/components/charts";
 import {
-  Avatar, ClientTile, Delta, Kpi, Net, NetIcon, PageHead, PostStatusLozenge, SectionTitle,
+  Avatar, CheckCircle, ClientTile, Delta, Due, Kpi, Net, NetIcon, PageHead, PostStatusLozenge, SectionTitle,
 } from "@/components/ui";
+import { useStore } from "@/components/store";
 
 const TABS = ["Visão geral", "Redes sociais", "Site", "Negócio"] as const;
 type Tab = (typeof TABS)[number];
@@ -33,6 +34,7 @@ function dayLabels(days: number) {
 export default function ClientPage() {
   const { id } = useParams<{ id: string }>();
   const c = getClient(id);
+  const { posts: POSTS, tasks, saveTask } = useStore();
   const [tab, setTab] = useState<Tab>("Visão geral");
   const [days, setDays] = useState(30);
   const [nets, setNets] = useState<NetworkId[]>(c?.networks ?? []);
@@ -277,7 +279,7 @@ export default function ClientPage() {
               <div className="card card__body" style={{ marginTop: 12 }}>
                 <div className="eyebrow">Das redes para o site</div>
                 <p style={{ marginTop: 8 }}>
-                  <span className="serif" style={{ fontSize: 28 }}>{num(site.sources[1].value * scale)}</span>{" "}
+                  <span style={{ fontSize: 26, fontWeight: 600 }}>{num(site.sources[1].value * scale)}</span>{" "}
                   <span className="muted">sessões vieram das redes sociais — {Math.round((site.sources[1].value / site.sessions) * 100)}% do total.</span>
                 </p>
               </div>
@@ -304,13 +306,13 @@ export default function ClientPage() {
             </div>
             <SectionTitle title="Tarefas" action={<Link href="/tarefas">Todas</Link>} />
             <div className="list">
-              {TASKS.filter((t) => t.clientId === c.id).map((t) => (
-                <div key={t.id} className="list-item">
-                  <span className="ticket__key" style={{ minWidth: 64 }}>{t.key}</span>
-                  <div className={`grow ${t.status === "feito" ? "done-text" : ""}`}>{t.title}</div>
-                  <span className="lozenge">{t.status}</span>
+              {tasks.filter((t) => t.clientId === c.id).map((t) => (
+                <Link key={t.id} href={`/tarefas?t=${t.id}`} className="list-item" style={{ alignItems: "center" }}>
+                  <CheckCircle checked={t.done} label={`Concluir: ${t.title}`} onToggle={() => saveTask({ ...t, done: !t.done })} />
+                  <div className={`grow ${t.done ? "done-text" : ""}`}>{t.title}</div>
+                  <span style={{ fontSize: 13 }}><Due date={t.due} done={t.done} /></span>
                   <Avatar userId={t.assignee} size={22} />
-                </div>
+                </Link>
               ))}
             </div>
           </div>
@@ -379,7 +381,7 @@ function TopPostsTable({ posts }: { posts: ReturnType<typeof topPosts> }) {
   );
 }
 
-function UpcomingList({ posts }: { posts: typeof POSTS }) {
+function UpcomingList({ posts }: { posts: Post[] }) {
   if (!posts.length) return <div className="list empty">Nada agendado.</div>;
   return (
     <div className="list">

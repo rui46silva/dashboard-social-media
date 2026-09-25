@@ -1,7 +1,7 @@
-import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Check, FileText, Film, Images, Image as ImageIcon, Minus, Smartphone } from "lucide-react";
 import type { ReactNode } from "react";
-import { client as getClient, network, user as getUser, type NetworkId, type PostStatus } from "@/lib/data";
-import { initials, signedPct } from "@/lib/format";
+import { NOW, POST_STATUS, client as getClient, network, user as getUser, type NetworkId, type Post, type PostStatus } from "@/lib/data";
+import { dayMonth, initials, sameDay, signedPct } from "@/lib/format";
 
 export function PageHead({
   eyebrow,
@@ -60,19 +60,28 @@ export function Kpi({ label, value, foot }: { label: ReactNode; value: ReactNode
   );
 }
 
+/** Stable, readable avatar colour per name (white initials pass AA on all of these). */
+const AVATAR_COLORS = ["#c2508f", "#4573d2", "#2e7d5b", "#b35c1e", "#7a5bc4", "#1f7a8c", "#a8466b", "#5a6b2a"];
+export function avatarColor(name: string) {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
 export function Avatar({ userId, size = 26 }: { userId: string; size?: number }) {
   const u = getUser(userId);
   return (
-    <span className="avatar" style={{ ["--size" as string]: `${size}px` }} title={u.name}>
+    <span className="avatar" style={{ ["--size" as string]: `${size}px`, ["--av" as string]: avatarColor(u.name) }} title={u.name}>
       {initials(u.name)}
     </span>
   );
 }
 
 export function PersonAvatar({ name, size = 26 }: { name: string; size?: number }) {
+  const clean = name.replace(/^@/, "");
   return (
-    <span className="avatar" style={{ ["--size" as string]: `${size}px` }}>
-      {initials(name.replace(/^@/, ""))}
+    <span className="avatar" style={{ ["--size" as string]: `${size}px`, ["--av" as string]: avatarColor(clean) }}>
+      {initials(clean)}
     </span>
   );
 }
@@ -116,18 +125,72 @@ export function Net({ id }: { id: NetworkId }) {
 }
 
 const STATUS_LOZENGE: Record<PostStatus, string> = {
-  publicado: "",
+  todo: "",
+  uat: "lozenge--warn",
+  confirmar: "lozenge--info",
   agendado: "lozenge--good",
-  aprovação: "lozenge--warn",
-  rascunho: "",
-};
-const STATUS_LABEL: Record<PostStatus, string> = {
-  publicado: "Publicado",
-  agendado: "Agendado",
-  aprovação: "Em aprovação",
-  rascunho: "Rascunho",
+  publicado: "lozenge--violet",
 };
 
 export function PostStatusLozenge({ status }: { status: PostStatus }) {
-  return <span className={`lozenge ${STATUS_LOZENGE[status]}`}>{STATUS_LABEL[status]}</span>;
+  return <span className={`lozenge ${STATUS_LOZENGE[status]}`}>{POST_STATUS[status]}</span>;
+}
+
+/** Asana-style completion circle. */
+export function CheckCircle({ checked, onToggle, label, large }: { checked: boolean; onToggle: () => void; label: string; large?: boolean }) {
+  return (
+    <button
+      className={`check ${large ? "check--lg" : ""}`}
+      role="checkbox"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onToggle();
+      }}
+    >
+      <Check strokeWidth={3} />
+    </button>
+  );
+}
+
+/** Due date coloured like a task manager: late red, today green, next 2 days amber. */
+export function Due({ date, done }: { date: Date | null; done?: boolean }) {
+  if (!date) return <span className="faint">—</span>;
+  const tomorrow = new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() + 1);
+  const startToday = new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate());
+  const late = date < startToday;
+  const today = sameDay(date, NOW);
+  const soon = sameDay(date, tomorrow);
+  const cls = done ? "faint" : late ? "due--late" : today ? "due--today" : soon ? "due--soon" : "";
+  const label = today ? "Hoje" : soon ? "Amanhã" : sameDay(date, new Date(startToday.getTime() - 864e5)) ? "Ontem" : dayMonth(date);
+  return <span className={cls}>{label}</span>;
+}
+
+const KIND_ICON = { Reel: Film, Vídeo: Film, Carrossel: Images, Imagem: ImageIcon, Story: Smartphone, Artigo: FileText };
+
+/**
+ * Stand-in for the creative until real media is uploaded: a tinted tile in the
+ * client's colour with the format, so previews feel like posts, not rows.
+ */
+export function PostThumb({ post, className = "preview-media", label = true }: { post: Pick<Post, "id" | "clientId" | "kind">; className?: string; label?: boolean }) {
+  const c = getClient(post.clientId)!;
+  const n = post.id.split("").reduce((a, ch) => a + ch.charCodeAt(0), 0);
+  const shift = (n % 5) * 14 - 28;
+  const Icon = KIND_ICON[post.kind];
+  return (
+    <div
+      className={className}
+      style={{
+        background: `radial-gradient(120% 90% at ${20 + (n % 60)}% 10%, oklch(0.78 0.09 ${c.hue + shift}) 0%, transparent 60%), linear-gradient(160deg, oklch(0.6 0.1 ${c.hue + shift}) 0%, oklch(0.36 0.07 ${c.hue - shift}) 100%)`,
+      }}
+    >
+      {label && (
+        <span className="row" style={{ gap: 6, position: "absolute", left: 10, bottom: 10, fontSize: 12, fontWeight: 600 }}>
+          <Icon size={14} /> {post.kind}
+        </span>
+      )}
+    </div>
+  );
 }

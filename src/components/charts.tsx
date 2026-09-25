@@ -106,7 +106,7 @@ export function LineChart({
           </g>
         ))}
         {labels.map((l, i) =>
-          i % every === 0 || i === n - 1 ? (
+          (i % every === 0 && n - 1 - i >= every * 0.6) || i === n - 1 ? (
             <text key={i} className="axis-label" x={x(i)} y={height - 6} textAnchor={i === n - 1 ? "end" : i === 0 ? "start" : "middle"}>
               {l}
             </text>

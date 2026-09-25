@@ -5,9 +5,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Bell,
+  BriefcaseBusiness,
+  Building2,
   CalendarDays,
+  CheckCircle2,
   ChevronRight,
   Contact,
+  Eye,
   FileText,
   Home,
   Inbox,
@@ -21,54 +25,64 @@ import {
   Sun,
   Swords,
   Users,
-  Eye,
-  BriefcaseBusiness,
   type LucideIcon,
 } from "lucide-react";
-import { CLIENTS, INBOX, ROLES, TASKS, NOW, type Permission } from "@/lib/data";
-import { ClientTile } from "./ui";
+import { CLIENTS, INBOX, NOW, ROLES, type Permission } from "@/lib/data";
+import { avatarColor, ClientTile } from "./ui";
 import { useSession } from "./session";
+import { useStore } from "./store";
 
-type NavItem = { href: string; label: string; icon: LucideIcon; perm?: Permission; count?: number };
+type NavItem = { href: string; label: string; icon: LucideIcon; perm?: Permission; count?: number; alert?: boolean };
 
 const unread = INBOX.filter((m) => m.unread).length;
-const myOpenTasks = TASKS.filter((t) => t.status !== "feito" && t.due <= new Date(NOW.getTime() + 864e5)).length;
 
-const GROUPS: { label: string; items: NavItem[] }[] = [
-  {
-    label: "Trabalho",
-    items: [
-      { href: "/", label: "Início", icon: Home },
-      { href: "/tarefas", label: "Tarefas", icon: ListChecks, perm: "tarefas", count: myOpenTasks },
-      { href: "/inbox", label: "Inbox", icon: Inbox, perm: "inbox", count: unread },
-      { href: "/calendario", label: "Calendário", icon: CalendarDays, perm: "publicar" },
-    ],
-  },
-  {
-    label: "Análise",
-    items: [
-      { href: "/clientes", label: "Clientes", icon: BriefcaseBusiness },
-      { href: "/concorrentes", label: "Concorrentes", icon: Swords },
-      { href: "/relatorios", label: "Relatórios", icon: FileText, perm: "relatorios" },
-    ],
-  },
-  {
-    label: "Negócio",
-    items: [
-      { href: "/crm/pipeline", label: "Pipeline", icon: KanbanSquare, perm: "crm" },
-      { href: "/crm", label: "Contactos e empresas", icon: Contact, perm: "crm" },
-    ],
-  },
-  {
-    label: "Agência",
-    items: [
-      { href: "/equipa", label: "Equipa e papéis", icon: Users },
-      { href: "/portal/kinetik", label: "Pré-visualizar portal", icon: Eye },
-    ],
-  },
-];
-
-const ALL_ITEMS = GROUPS.flatMap((g) => g.items);
+function useGroups(): { label: string; items: NavItem[] }[] {
+  const { posts, tasks } = useStore();
+  const { user } = useSession();
+  const endOfTomorrow = new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() + 2);
+  const myDue = tasks.filter((t) => !t.done && t.assignee === user.id && t.due && t.due < endOfTomorrow).length;
+  const toReview = posts.filter((p) => p.status === "confirmar" || (p.status === "todo" && p.rounds > 0)).length;
+  return [
+    {
+      label: "",
+      items: [
+        { href: "/", label: "Início", icon: Home },
+        { href: "/tarefas", label: "Tarefas", icon: ListChecks, perm: "tarefas", count: myDue },
+        { href: "/inbox", label: "Inbox", icon: Inbox, perm: "inbox", count: unread, alert: true },
+      ],
+    },
+    {
+      label: "Conteúdo",
+      items: [
+        { href: "/conteudo", label: "Aprovações", icon: CheckCircle2, perm: "publicar", count: toReview, alert: true },
+        { href: "/calendario", label: "Calendário", icon: CalendarDays, perm: "publicar" },
+      ],
+    },
+    {
+      label: "Análise",
+      items: [
+        { href: "/clientes", label: "Clientes", icon: BriefcaseBusiness },
+        { href: "/concorrentes", label: "Concorrentes", icon: Swords },
+        { href: "/relatorios", label: "Relatórios", icon: FileText, perm: "relatorios" },
+      ],
+    },
+    {
+      label: "Negócio",
+      items: [
+        { href: "/crm/pipeline", label: "Pipeline", icon: KanbanSquare, perm: "crm" },
+        { href: "/crm", label: "Contactos e empresas", icon: Contact, perm: "crm" },
+        { href: "/empresa", label: "Empresa", icon: Building2, perm: "empresa" },
+      ],
+    },
+    {
+      label: "Agência",
+      items: [
+        { href: "/equipa", label: "Equipa e papéis", icon: Users },
+        { href: "/portal/kinetik", label: "Ver portal do cliente", icon: Eye },
+      ],
+    },
+  ];
+}
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -76,17 +90,29 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(href + "/");
 }
 
+function LogoMark() {
+  return (
+    <span className="logo__mark" aria-hidden>
+      <i />
+      <i />
+      <i />
+      <i />
+    </span>
+  );
+}
+
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { can } = useSession();
+  const groups = useGroups();
   return (
     <>
-      {GROUPS.map((g) => {
+      {groups.map((g) => {
         const items = g.items.filter((i) => !i.perm || can(i.perm));
         if (!items.length) return null;
         return (
-          <div className="nav-group" key={g.label}>
-            <div className="eyebrow nav-group__label">{g.label}</div>
+          <div className="nav-group" key={g.label || "main"}>
+            {g.label && <div className="nav-group__label">{g.label}</div>}
             {items.map((i) => (
               <Link
                 key={i.href}
@@ -97,14 +123,14 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
               >
                 <i.icon size={17} strokeWidth={1.8} />
                 {i.label}
-                {!!i.count && <span className="count num">{i.count}</span>}
+                {!!i.count && <span className={`count num ${i.alert ? "count--alert" : ""}`}>{i.count}</span>}
               </Link>
             ))}
           </div>
         );
       })}
       <div className="nav-group">
-        <div className="eyebrow nav-group__label">Clientes</div>
+        <div className="nav-group__label">Clientes</div>
         {CLIENTS.map((c) => (
           <Link
             key={c.id}
@@ -127,7 +153,7 @@ function ThemeSwitch() {
   const opts = [
     { id: "light", icon: Sun, label: "Claro" },
     { id: "dark", icon: Moon, label: "Escuro" },
-    { id: "system", icon: Monitor, label: "Sistema" },
+    { id: "system", icon: Monitor, label: "Auto" },
   ] as const;
   return (
     <div className="segmented" role="group" aria-label="Tema" style={{ width: "100%" }}>
@@ -149,10 +175,12 @@ function ThemeSwitch() {
 
 function RoleSwitch() {
   const { viewAs, setViewAs } = useSession();
+  const { reset } = useStore();
   return (
+    <>
     <label className="field">
       <span>Ver como (protótipo)</span>
-      <select className="input" value={viewAs} onChange={(e) => setViewAs(e.target.value as typeof viewAs)}>
+      <select className="input" style={{ height: 32 }} value={viewAs} onChange={(e) => setViewAs(e.target.value as typeof viewAs)}>
         {ROLES.map((r) => (
           <option key={r.id} value={r.id}>
             {r.name}
@@ -160,6 +188,10 @@ function RoleSwitch() {
         ))}
       </select>
     </label>
+    <button className="nav-link" style={{ height: 26, fontSize: 12, color: "var(--side-ink-2)" }} onClick={() => confirm("Repor os dados de demonstração?") && reset()}>
+      Repor dados de demonstração
+    </button>
+    </>
   );
 }
 
@@ -168,16 +200,19 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
   const [active, setActive] = useState(0);
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
+  const groups = useGroups();
+  const { tasks } = useStore();
 
   const results = useMemo(() => {
     const all = [
-      ...ALL_ITEMS.map((i) => ({ href: i.href, label: i.label, hint: "Ir para" })),
-      ...CLIENTS.map((c) => ({ href: `/clientes/${c.id}`, label: c.name, hint: "Cliente" })),
       { href: "/calendario?novo=1", label: "Nova publicação", hint: "Ação" },
+      ...groups.flatMap((g) => g.items).map((i) => ({ href: i.href, label: i.label, hint: "Ir para" })),
+      ...CLIENTS.map((c) => ({ href: `/clientes/${c.id}`, label: c.name, hint: "Cliente" })),
+      ...tasks.filter((t) => !t.done).map((t) => ({ href: `/tarefas?t=${t.id}`, label: t.title, hint: "Tarefa" })),
     ];
     const s = q.trim().toLowerCase();
-    return s ? all.filter((r) => r.label.toLowerCase().includes(s)) : all;
-  }, [q]);
+    return (s ? all.filter((r) => r.label.toLowerCase().includes(s)) : all).slice(0, 30);
+  }, [q, groups, tasks]);
 
   useEffect(() => {
     if (open) {
@@ -199,7 +234,7 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
         <input
           ref={input}
           value={q}
-          placeholder="Procurar clientes, páginas, ações…"
+          placeholder="Procurar tarefas, clientes, páginas…"
           onChange={(e) => {
             setQ(e.target.value);
             setActive(0);
@@ -223,7 +258,7 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
                 go(r.href);
               }}
             >
-              <span className="grow">{r.label}</span>
+              <span className="grow truncate">{r.label}</span>
               <span className="faint" style={{ fontSize: 12 }}>{r.hint}</span>
             </a>
           ))}
@@ -238,12 +273,14 @@ const CRUMB: Record<string, string> = {
   tarefas: "Tarefas",
   inbox: "Inbox",
   calendario: "Calendário",
+  conteudo: "Aprovações",
   clientes: "Clientes",
   concorrentes: "Concorrentes",
   relatorios: "Relatórios",
   crm: "CRM",
   pipeline: "Pipeline",
   equipa: "Equipa e papéis",
+  empresa: "Empresa",
 };
 
 function Crumbs() {
@@ -269,7 +306,7 @@ function Crumbs() {
 
 export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { viewAs, can } = useSession();
+  const { viewAs, can, user } = useSession();
   const [sheet, setSheet] = useState(false);
   const [palette, setPalette] = useState(false);
 
@@ -286,9 +323,9 @@ export function Shell({ children }: { children: ReactNode }) {
 
   const tabs: NavItem[] = [
     { href: "/", label: "Início", icon: Home },
-    { href: "/calendario", label: "Calendário", icon: CalendarDays, perm: "publicar" },
+    { href: "/tarefas", label: "Tarefas", icon: ListChecks, perm: "tarefas" },
+    { href: "/conteudo", label: "Aprovações", icon: CheckCircle2, perm: "publicar" },
     { href: "/inbox", label: "Inbox", icon: Inbox, perm: "inbox", count: unread },
-    { href: "/crm/pipeline", label: "Pipeline", icon: KanbanSquare, perm: "crm" },
   ];
   const visibleTabs = tabs.filter((t) => !t.perm || can(t.perm)).slice(0, 4);
   while (visibleTabs.length < 4) visibleTabs.push({ href: "/clientes", label: "Clientes", icon: BriefcaseBusiness });
@@ -296,20 +333,14 @@ export function Shell({ children }: { children: ReactNode }) {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="spread">
-          <Link href="/" className="logo">
-            <span className="logo__mark">m</span>
-            Mesa
-          </Link>
-          <Link href="/calendario?novo=1" className="icon-btn" title="Nova publicação" aria-label="Nova publicação">
-            <Plus size={18} />
-          </Link>
-        </div>
-        <button className="search-btn" onClick={() => setPalette(true)}>
-          <Search size={15} />
-          Procurar
-          <kbd>⌘K</kbd>
-        </button>
+        <Link href="/" className="logo">
+          <LogoMark />
+          Mesa
+        </Link>
+        <Link href="/calendario?novo=1" className="side-cta">
+          <span><Plus size={14} strokeWidth={2.5} /></span>
+          Criar
+        </Link>
         <nav aria-label="Principal">
           <NavLinks />
         </nav>
@@ -323,13 +354,18 @@ export function Shell({ children }: { children: ReactNode }) {
         <header className="topbar">
           <div className="topbar__title">
             <Link href="/" className="logo only-mobile">
-              <span className="logo__mark">m</span>
+              <LogoMark />
               Mesa
             </Link>
             <nav className="topbar__crumbs" aria-label="Localização">
               <Crumbs />
             </nav>
           </div>
+          <button className="topbar__search" onClick={() => setPalette(true)}>
+            <Search size={15} />
+            Procurar
+            <kbd>⌘K</kbd>
+          </button>
           <button className="icon-btn only-mobile" onClick={() => setPalette(true)} aria-label="Procurar">
             <Search size={19} />
           </button>
@@ -337,7 +373,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <Bell size={19} />
             {unread > 0 && <span className="dot" />}
           </Link>
-          <span className="avatar" style={{ ["--size" as string]: "30px" }} title="Rui Silva">
+          <span className="avatar" style={{ ["--size" as string]: "30px", ["--av" as string]: avatarColor(user.name) }} title={user.name}>
             RS
           </span>
         </header>
@@ -351,7 +387,7 @@ export function Shell({ children }: { children: ReactNode }) {
               {viewAs === "cliente" && (
                 <>
                   {" "}
-                  Os clientes entram diretamente no <Link href="/portal/kinetik" style={{ textDecoration: "underline" }}>portal</Link>.
+                  Os clientes entram diretamente no <Link href="/portal/kinetik" className="link">portal</Link>.
                 </>
               )}
             </span>
@@ -366,7 +402,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <Link key={t.href} href={t.href} aria-current={isActive(pathname, t.href) ? "page" : undefined}>
             <t.icon size={21} strokeWidth={1.8} />
             {t.label}
-            {!!t.count && <span className="badge-count badge-count--sm num">{t.count}</span>}
+            {!!t.count && <span className="badge-count num">{t.count}</span>}
           </Link>
         ))}
         <button onClick={() => setSheet(true)} aria-expanded={sheet}>
@@ -381,8 +417,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <div className="sheet" role="dialog" aria-label="Menu">
             <div className="sheet__grip" />
             <NavLinks onNavigate={() => setSheet(false)} />
-            <div className="divider" />
-            <div className="grid">
+            <div className="sheet__foot" style={{ marginTop: 16 }}>
               <RoleSwitch />
               <ThemeSwitch />
             </div>

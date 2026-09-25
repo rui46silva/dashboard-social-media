@@ -284,13 +284,29 @@ export const SITE: Record<string, SiteStats> = Object.fromEntries(
 
 /* ------------------------------------------------------------------- Posts */
 
-export type PostStatus = "rascunho" | "aprovação" | "agendado" | "publicado";
+/**
+ * Content approval flow:
+ *   todo → uat (cliente revê) → confirmar (cliente aprovou, agência confirma) → agendado → publicado
+ *   uat → cliente pede alterações → volta a todo, com o feedback agarrado ao post.
+ */
+export type PostStatus = "todo" | "uat" | "confirmar" | "agendado" | "publicado";
+export const POST_FLOW: PostStatus[] = ["todo", "uat", "confirmar", "agendado"];
 export const POST_STATUS: Record<PostStatus, string> = {
-  rascunho: "Rascunho",
-  aprovação: "Em aprovação",
+  todo: "Em produção",
+  uat: "Com o cliente",
+  confirmar: "Aprovado · confirmar",
   agendado: "Agendado",
   publicado: "Publicado",
 };
+export const POST_STATUS_HINT: Record<PostStatus, string> = {
+  todo: "A equipa está a criar ou a corrigir",
+  uat: "À espera da aprovação do cliente (UAT)",
+  confirmar: "O cliente aprovou — falta a agência confirmar tudo",
+  agendado: "Confirmado e agendado para publicar",
+  publicado: "Já está no ar",
+};
+
+export type PostComment = { by: string; name: string; text: string; date: Date; kind: "feedback" | "nota" | "sistema" };
 
 export type Post = {
   id: string;
@@ -301,9 +317,12 @@ export type Post = {
   caption: string;
   status: PostStatus;
   author: string;
+  /** Rounds of client changes requested so far. */
+  rounds: number;
+  comments: PostComment[];
 };
 
-const POST_SEEDS: [string, NetworkId[], number, number, Post["kind"], string][] = [
+const POST_SEEDS: [string, NetworkId[], number, number, Post["kind"], string, PostStatus?][] = [
   ["casa-lume", ["instagram", "facebook"], -9, 18, "Carrossel", "Luz quente ou luz fria? Um guia rápido para cada divisão"],
   ["kinetik", ["tiktok", "instagram"], -7, 7, "Reel", "Treino de 12 minutos para o intervalo de almoço"],
   ["orvalho", ["instagram"], -6, 8, "Imagem", "O centeio de sábado saiu do forno"],
@@ -312,45 +331,59 @@ const POST_SEEDS: [string, NetworkId[], number, number, Post["kind"], string][] 
   ["kinetik", ["facebook"], -3, 12, "Imagem", "Aulas de grupo de outubro — horários novos"],
   ["orvalho", ["tiktok"], -2, 17, "Vídeo", "Bastidores da massa-mãe"],
   ["kinetik", ["instagram"], -1, 18, "Carrossel", "Mobilidade da anca: 4 exercícios"],
-  ["casa-lume", ["instagram", "facebook"], 0, 13, "Reel", "Nova coleção Maré — do forno ao teto"],
-  ["atlantico", ["instagram"], 0, 19, "Story", "Vagas para a aula de amanhã às 8h"],
-  ["orvalho", ["instagram", "facebook"], 1, 8, "Carrossel", "Pastel de nata com casca de laranja"],
-  ["kinetik", ["tiktok"], 1, 19, "Vídeo", "Desafio de pranchas da semana"],
-  ["casa-lume", ["instagram"], 2, 18, "Imagem", "Antes e depois: escritório em Campo de Ourique"],
-  ["atlantico", ["tiktok", "instagram"], 3, 18, "Reel", "Como ler o mar antes de entrar"],
-  ["kinetik", ["linkedin"], 3, 9, "Artigo", "Bem-estar no trabalho: programa para empresas"],
-  ["orvalho", ["instagram"], 5, 8, "Imagem", "Sábado de centeio"],
-  ["casa-lume", ["facebook"], 6, 12, "Imagem", "Workshop: iluminar a sala em 3 passos"],
-  ["kinetik", ["instagram", "facebook"], 7, 18, "Carrossel", "Plano de treino para outubro"],
-  ["atlantico", ["instagram"], 8, 19, "Carrossel", "Pacote de fim de época"],
-  ["orvalho", ["tiktok"], 9, 17, "Vídeo", "Um dia na padaria, das 4h às 13h"],
-  ["casa-lume", ["instagram", "linkedin"], 10, 11, "Carrossel", "Projeto: hotel boutique no Porto"],
-  ["kinetik", ["tiktok", "instagram"], 12, 7, "Reel", "Treino de 12 minutos — parte 2"],
-  ["orvalho", ["instagram", "facebook"], 14, 8, "Imagem", "Castanhas e pão de deus: chegou o outono"],
-  ["atlantico", ["tiktok"], 15, 19, "Vídeo", "Últimas ondas de setembro"],
+  ["casa-lume", ["instagram", "facebook"], 0, 13, "Reel", "Nova coleção Maré — do forno ao teto", "agendado"],
+  ["atlantico", ["instagram"], 0, 19, "Story", "Vagas para a aula de amanhã às 8h", "agendado"],
+  ["orvalho", ["instagram", "facebook"], 1, 8, "Carrossel", "Pastel de nata com casca de laranja", "confirmar"],
+  ["kinetik", ["tiktok"], 1, 19, "Vídeo", "Desafio de pranchas da semana", "agendado"],
+  ["casa-lume", ["instagram"], 2, 18, "Imagem", "Antes e depois: escritório em Campo de Ourique", "uat"],
+  ["atlantico", ["tiktok", "instagram"], 3, 18, "Reel", "Como ler o mar antes de entrar", "uat"],
+  ["kinetik", ["linkedin"], 3, 9, "Artigo", "Bem-estar no trabalho: programa para empresas", "agendado"],
+  ["orvalho", ["instagram"], 5, 8, "Imagem", "Sábado de centeio", "todo"],
+  ["casa-lume", ["facebook"], 6, 12, "Imagem", "Workshop: iluminar a sala em 3 passos", "uat"],
+  ["kinetik", ["instagram", "facebook"], 7, 18, "Carrossel", "Plano de treino para outubro", "uat"],
+  ["atlantico", ["instagram"], 8, 19, "Carrossel", "Pacote de fim de época", "todo"],
+  ["orvalho", ["tiktok"], 9, 17, "Vídeo", "Um dia na padaria, das 4h às 13h", "uat"],
+  ["casa-lume", ["instagram", "linkedin"], 10, 11, "Carrossel", "Projeto: hotel boutique no Porto", "todo"],
+  ["kinetik", ["tiktok", "instagram"], 12, 7, "Reel", "Treino de 12 minutos — parte 2", "todo"],
+  ["orvalho", ["instagram", "facebook"], 14, 8, "Imagem", "Castanhas e pão de deus: chegou o outono", "todo"],
+  ["atlantico", ["tiktok"], 15, 19, "Vídeo", "Últimas ondas de setembro", "todo"],
 ];
 
-export const POSTS: Post[] = POST_SEEDS.map(([clientId, networks, offset, hour, kind, caption], i) => ({
-  id: `p${i + 1}`,
-  clientId,
-  networks,
-  date: daysFromNow(offset, hour, i % 2 ? 30 : 0),
-  kind,
-  caption,
-  status:
-    offset < 0 || (offset === 0 && hour < 11)
-      ? "publicado"
-      : offset <= 3
-        ? i % 3 === 0
-          ? "aprovação"
-          : "agendado"
-        : i % 4 === 0
-          ? "rascunho"
-          : i % 3 === 0
-            ? "aprovação"
-            : "agendado",
-  author: ["u-ines", "u-tiago", "u-ana"][i % 3],
-}));
+const CLIENT_CONTACT: Record<string, [string, string]> = {
+  "casa-lume": ["c1", "Sofia Mendes"],
+  orvalho: ["c2", "Filipa Costa"],
+  kinetik: ["c3", "Marco Teixeira"],
+  atlantico: ["c4", "Nuno Ferraz"],
+};
+
+/** Client feedback that sent posts back to production. */
+const REJECTIONS: Record<number, string> = {
+  15: "A foto do centeio está escura demais. Podem usar a da fornada das 7h, com a luz da janela?",
+  21: "Gostamos muito! Só trocar a música — esta já foi usada pelo Pulse Gym na semana passada.",
+};
+
+export const POSTS: Post[] = POST_SEEDS.map(([clientId, networks, offset, hour, kind, caption, status], i) => {
+  const [contactId, contactName] = CLIENT_CONTACT[clientId];
+  const comments: PostComment[] = [];
+  if (REJECTIONS[i]) {
+    comments.push({ by: contactId, name: contactName, text: REJECTIONS[i], date: daysAgo(1, 16, 40), kind: "feedback" });
+  }
+  if (status === "confirmar") {
+    comments.push({ by: contactId, name: contactName, text: "Aprovado! Está ótimo.", date: daysAgo(0, 9, 12), kind: "feedback" });
+  }
+  return {
+    id: `p${i + 1}`,
+    clientId,
+    networks,
+    date: daysFromNow(offset, hour, i % 2 ? 30 : 0),
+    kind,
+    caption,
+    status: status ?? "publicado",
+    author: ["u-ines", "u-tiago", "u-ana"][i % 3],
+    rounds: REJECTIONS[i] ? 1 : 0,
+    comments,
+  };
+});
 
 /* ------------------------------------------------------------------- Inbox */
 
@@ -567,33 +600,111 @@ export const DEALS: Deal[] = [
 
 /* ------------------------------------------------------------------ Tasks */
 
-export type TaskStatus = "a fazer" | "em curso" | "em revisão" | "feito";
-export const TASK_STATUSES: TaskStatus[] = ["a fazer", "em curso", "em revisão", "feito"];
+export type TaskSection = "backlog" | "curso" | "revisao";
+export const TASK_SECTIONS: { id: TaskSection; name: string }[] = [
+  { id: "backlog", name: "Por fazer" },
+  { id: "curso", name: "Em curso" },
+  { id: "revisao", name: "Em revisão" },
+];
 export type Priority = "alta" | "média" | "baixa";
+
+export type Subtask = { id: string; title: string; done: boolean };
+export type TaskComment = { by: string; text: string; date: Date };
 
 export type Task = {
   id: string;
-  key: string;
   title: string;
   clientId?: string;
   assignee: string;
-  due: Date;
-  status: TaskStatus;
+  due: Date | null;
+  section: TaskSection;
+  done: boolean;
   priority: Priority;
+  description: string;
+  subtasks: Subtask[];
+  comments: TaskComment[];
+  likes: string[];
+  collaborators: string[];
   tags: string[];
+  createdBy: string;
 };
 
+const st = (id: string, title: string, done = false): Subtask => ({ id, title, done });
+
 export const TASKS: Task[] = [
-  { id: "t1", key: "MES-142", title: "Responder à reclamação de entrega (Facebook)", clientId: "casa-lume", assignee: "u-ana", due: daysAgo(0, 12), status: "a fazer", priority: "alta", tags: ["inbox"] },
-  { id: "t2", key: "MES-139", title: "Aprovar carrossel do pastel de nata", clientId: "orvalho", assignee: "u-tiago", due: daysAgo(0, 17), status: "em revisão", priority: "média", tags: ["conteúdo"] },
-  { id: "t3", key: "MES-137", title: "Editar Reel da coleção Maré", clientId: "casa-lume", assignee: "u-ines", due: daysAgo(0, 12), status: "em curso", priority: "alta", tags: ["vídeo"] },
-  { id: "t4", key: "MES-135", title: "Proposta Vinhos Serra Alta", assignee: "u-rui", due: daysFromNow(1, 18), status: "em curso", priority: "alta", tags: ["comercial"] },
-  { id: "t5", key: "MES-133", title: "Relatório mensal de setembro", clientId: "kinetik", assignee: "u-ana", due: daysFromNow(6, 18), status: "a fazer", priority: "média", tags: ["relatório"] },
-  { id: "t6", key: "MES-131", title: "Guião do vídeo institucional", clientId: "atlantico", assignee: "u-ines", due: daysFromNow(3, 18), status: "a fazer", priority: "baixa", tags: ["vídeo"] },
-  { id: "t7", key: "MES-128", title: "Ligar API do TikTok (sandbox)", assignee: "u-pedro", due: daysFromNow(2, 18), status: "em curso", priority: "média", tags: ["dev"] },
-  { id: "t8", key: "MES-126", title: "Calendário editorial de outubro", clientId: "kinetik", assignee: "u-tiago", due: daysFromNow(4, 18), status: "a fazer", priority: "média", tags: ["planeamento"] },
-  { id: "t9", key: "MES-120", title: "Onboarding: acesso ao GA4 da Orvalho", clientId: "orvalho", assignee: "u-pedro", due: daysAgo(2, 18), status: "feito", priority: "baixa", tags: ["dev"] },
-  { id: "t10", key: "MES-118", title: "Fotografias de produto — lote 3", clientId: "casa-lume", assignee: "u-ines", due: daysAgo(3, 18), status: "feito", priority: "média", tags: ["design"] },
+  {
+    id: "t1", title: "Responder à reclamação de entrega (Facebook)", clientId: "casa-lume", assignee: "u-ana", due: daysAgo(0, 12),
+    section: "backlog", done: false, priority: "alta", tags: ["inbox"], createdBy: "u-rui", likes: [], collaborators: ["u-rui"],
+    description: "O Rui Andrade comentou no carrossel «Luz quente ou luz fria?» que a encomenda está atrasada 3 semanas. Confirmar com a Sofia o estado da encomenda antes de responder em público.",
+    subtasks: [st("t1a", "Pedir número da encomenda por mensagem privada", true), st("t1b", "Confirmar estado com a Sofia (Casa Lume)"), st("t1c", "Responder no comentário")],
+    comments: [{ by: "u-rui", text: "Prioridade máxima — está a ganhar gostos.", date: daysAgo(0, 8, 50) }],
+  },
+  {
+    id: "t2", title: "Aprovar internamente o carrossel do pastel de nata", clientId: "orvalho", assignee: "u-tiago", due: daysAgo(0, 17),
+    section: "revisao", done: false, priority: "média", tags: ["conteúdo"], createdBy: "u-tiago", likes: ["u-ines"], collaborators: ["u-ines"],
+    description: "A Filipa já aprovou. Rever legenda, hashtags e agendar para amanhã às 8h.",
+    subtasks: [st("t2a", "Rever legenda", true), st("t2b", "Confirmar horário"), st("t2c", "Agendar")],
+    comments: [],
+  },
+  {
+    id: "t3", title: "Editar Reel da coleção Maré", clientId: "casa-lume", assignee: "u-ines", due: daysAgo(0, 12),
+    section: "curso", done: false, priority: "alta", tags: ["vídeo"], createdBy: "u-ana", likes: [], collaborators: ["u-ana"],
+    description: "Cortes a partir das filmagens de terça. Máximo 20 segundos, música do banco aprovado.",
+    subtasks: [st("t3a", "Seleção de planos", true), st("t3b", "Montagem", true), st("t3c", "Cor e legendas")],
+    comments: [{ by: "u-ana", text: "A Sofia pediu para mostrar o candeeiro grande logo no início.", date: daysAgo(1, 15) }],
+  },
+  {
+    id: "t4", title: "Proposta Vinhos Serra Alta", assignee: "u-rui", due: daysFromNow(1, 18),
+    section: "curso", done: false, priority: "alta", tags: ["comercial"], createdBy: "u-rui", likes: [], collaborators: [],
+    description: "Gestão de Instagram + Facebook e campanha de vindimas. Avença alvo: 1200 €/mês.",
+    subtasks: [st("t4a", "Diagnóstico das redes atuais", true), st("t4b", "Plano de conteúdos (3 meses)"), st("t4c", "Orçamento"), st("t4d", "Enviar à Carolina")],
+    comments: [],
+  },
+  {
+    id: "t5", title: "Relatório mensal de setembro", clientId: "kinetik", assignee: "u-ana", due: daysFromNow(6, 18),
+    section: "backlog", done: false, priority: "média", tags: ["relatório"], createdBy: "u-ana", likes: [], collaborators: [],
+    description: "", subtasks: [], comments: [],
+  },
+  {
+    id: "t6", title: "Guião do vídeo institucional", clientId: "atlantico", assignee: "u-ines", due: daysFromNow(3, 18),
+    section: "backlog", done: false, priority: "baixa", tags: ["vídeo"], createdBy: "u-tiago", likes: [], collaborators: ["u-tiago"],
+    description: "60–90 segundos. Tom: família, segurança, mar.", subtasks: [st("t6a", "Entrevista ao Nuno"), st("t6b", "Estrutura"), st("t6c", "Guião final")], comments: [],
+  },
+  {
+    id: "t7", title: "Ligar API do TikTok (sandbox)", assignee: "u-pedro", due: daysFromNow(2, 18),
+    section: "curso", done: false, priority: "média", tags: ["dev"], createdBy: "u-pedro", likes: ["u-rui"], collaborators: [],
+    description: "Criar app no TikTok for Developers, pedir scopes de leitura e testar com a conta da Kinetik.",
+    subtasks: [st("t7a", "Criar app", true), st("t7b", "OAuth em sandbox"), st("t7c", "Ler métricas de vídeo")], comments: [],
+  },
+  {
+    id: "t8", title: "Calendário editorial de outubro", clientId: "kinetik", assignee: "u-tiago", due: daysFromNow(4, 18),
+    section: "backlog", done: false, priority: "média", tags: ["planeamento"], createdBy: "u-ana", likes: [], collaborators: ["u-ana", "u-ines"],
+    description: "", subtasks: [], comments: [],
+  },
+  {
+    id: "t9", title: "Corrigir foto do «Sábado de centeio» (feedback do cliente)", clientId: "orvalho", assignee: "u-ines", due: daysFromNow(1, 12),
+    section: "backlog", done: false, priority: "alta", tags: ["conteúdo", "alterações"], createdBy: "u-tiago", likes: [], collaborators: ["u-tiago"],
+    description: "A Filipa pediu a foto da fornada das 7h, com luz da janela. Voltar a submeter para aprovação.",
+    subtasks: [], comments: [],
+  },
+  {
+    id: "t10", title: "Sessão fotográfica de outono", clientId: "orvalho", assignee: "u-ines", due: daysFromNow(8, 9),
+    section: "backlog", done: false, priority: "média", tags: ["design"], createdBy: "u-tiago", likes: [], collaborators: [],
+    description: "", subtasks: [], comments: [],
+  },
+  {
+    id: "t11", title: "Onboarding: acesso ao GA4 da Orvalho", clientId: "orvalho", assignee: "u-pedro", due: daysAgo(2, 18),
+    section: "revisao", done: true, priority: "baixa", tags: ["dev"], createdBy: "u-tiago", likes: [], collaborators: [], description: "", subtasks: [], comments: [],
+  },
+  {
+    id: "t12", title: "Fotografias de produto — lote 3", clientId: "casa-lume", assignee: "u-ines", due: daysAgo(3, 18),
+    section: "revisao", done: true, priority: "média", tags: ["design"], createdBy: "u-ana", likes: ["u-ana", "u-rui"], collaborators: [], description: "", subtasks: [], comments: [],
+  },
+  {
+    id: "t13", title: "Rever preços da tabela de serviços 2027", assignee: "u-rui", due: daysFromNow(10, 18),
+    section: "backlog", done: false, priority: "média", tags: ["gestão"], createdBy: "u-rui", likes: [], collaborators: ["u-sara"],
+    description: "Ver margem por cliente no painel Empresa antes de decidir.", subtasks: [], comments: [],
+  },
 ];
 
 /* ------------------------------------------------------------ Team & roles */
@@ -611,7 +722,8 @@ export type Permission =
   | "gerir_clientes"
   | "gerir_utilizadores"
   | "integracoes"
-  | "faturacao";
+  | "faturacao"
+  | "empresa";
 
 export const PERMISSIONS: { id: Permission; label: string; hint: string }[] = [
   { id: "ver_dashboard", label: "Ver métricas", hint: "Painéis de redes, site e negócio" },
@@ -625,6 +737,7 @@ export const PERMISSIONS: { id: Permission; label: string; hint: string }[] = [
   { id: "gerir_utilizadores", label: "Gerir utilizadores e papéis", hint: "Convidar pessoas, atribuir papéis" },
   { id: "integracoes", label: "Integrações e API", hint: "Chaves, webhooks, ligações" },
   { id: "faturacao", label: "Faturação", hint: "Plano e pagamentos" },
+  { id: "empresa", label: "Gestão da empresa", hint: "Finanças, break-even, cenários e riscos" },
 ];
 
 export type Role = { id: RoleId; name: string; description: string; system: boolean; permissions: Permission[] };
@@ -679,3 +792,141 @@ export const USERS: User[] = [
   { id: "u-filipa", name: "Filipa Costa", email: "filipa@orvalho.pt", role: "cliente", title: "Sócia · Orvalho", clients: ["orvalho"], status: "convidado", lastSeen: daysAgo(30) },
 ];
 export const user = (id: string) => USERS.find((u) => u.id === id)!;
+
+/* ------------------------------------------------------ Company (CEO only) */
+
+/** Last 12 months, oldest first. Values in €. */
+export const FIN_MONTHS = Array.from({ length: 12 }, (_, i) => new Date(NOW.getFullYear(), NOW.getMonth() - 11 + i, 1));
+
+export const FINANCE = {
+  cash: 18400,
+  recurring: [3200, 3200, 3950, 3950, 4200, 4200, 4850, 4850, 5200, 5200, 5200, 5200],
+  projects: [0, 1800, 0, 2400, 0, 0, 1500, 0, 900, 0, 2400, 4100],
+  /** Fixed monthly costs today. */
+  fixed: [
+    { label: "Salários e encargos", value: 3900 },
+    { label: "Espaço (cowork)", value: 350 },
+    { label: "Software e licenças", value: 280 },
+    { label: "Marketing da agência", value: 200 },
+    { label: "Transportes e equipamento", value: 180 },
+    { label: "Contabilidade", value: 150 },
+    { label: "Seguros", value: 60 },
+  ],
+  /** Fixed cost history (the team grew in March). */
+  fixedHistory: [3950, 3950, 3950, 3990, 4010, 5020, 5060, 5080, 5090, 5110, 5120, 5120],
+  /** Freelancers, ads for clients, stock — as share of revenue. */
+  variableRate: 0.12,
+  /** Internal fully-loaded cost of one team hour. */
+  hourCost: 22,
+  newClientsLast12: 3,
+  churnedLast12: 1,
+  salesSpendLast12: 4800, // marketing + founder time spent selling
+};
+
+export type ClientEconomics = {
+  clientId: string;
+  fee: number;
+  hours: number; // per month, from timesheets
+  contractEnd: Date;
+};
+
+export const CLIENT_ECONOMICS: ClientEconomics[] = [
+  { clientId: "casa-lume", fee: 1450, hours: 38, contractEnd: daysFromNow(160) },
+  { clientId: "orvalho", fee: 900, hours: 34, contractEnd: daysFromNow(62) },
+  { clientId: "kinetik", fee: 2100, hours: 52, contractEnd: daysFromNow(240) },
+  { clientId: "atlantico", fee: 750, hours: 31, contractEnd: daysFromNow(45) },
+];
+
+/* ------------------------------------------------- Client portal: outcomes */
+
+export type ClientResults = {
+  headline: string;
+  outcomes: { label: string; value: number; hint: string }[];
+  estValue: number; // € of business attributed (estimate)
+  goals: { label: string; current: number; target: number; unit?: string }[];
+  love: { author: string; network: NetworkId; text: string }[];
+  work: { label: string; value: number }[];
+};
+
+export const RESULTS: Record<string, ClientResults> = {
+  "casa-lume": {
+    headline: "A coleção Maré foi vista por mais pessoas do que qualquer lançamento anterior.",
+    outcomes: [
+      { label: "Pedidos de orçamento", value: 23, hint: "por mensagem e formulário" },
+      { label: "Visitas à loja online", value: 4180, hint: "vindas das redes" },
+      { label: "Contactos de arquitetos", value: 4, hint: "potenciais parcerias" },
+    ],
+    estValue: 9400,
+    goals: [
+      { label: "Seguidores no Instagram", current: 18400, target: 20000 },
+      { label: "Pedidos de orçamento no trimestre", current: 58, target: 60 },
+    ],
+    love: [
+      { author: "@marta.casa", network: "instagram", text: "Comprei o candeeiro Maré e a sala mudou completamente. Obrigada!" },
+      { author: "Atelier Fonte", network: "instagram", text: "Gostávamos de falar sobre uma parceria para um projeto de hotel." },
+    ],
+    work: [
+      { label: "publicações", value: 16 }, { label: "Reels", value: 4 }, { label: "mensagens respondidas", value: 61 }, { label: "sessões fotográficas", value: 1 },
+    ],
+  },
+  orvalho: {
+    headline: "Os sábados de centeio esgotam — e metade dos clientes novos diz que vos viu no Instagram.",
+    outcomes: [
+      { label: "Encomendas por mensagem", value: 47, hint: "bolos e pão para eventos" },
+      { label: "Pedidos de direções", value: 312, hint: "Google Maps a partir das redes" },
+      { label: "Clientes novos (inquérito)", value: 38, hint: "disseram «vi no Instagram»" },
+    ],
+    estValue: 3850,
+    goals: [
+      { label: "Seguidores no TikTok", current: 21300, target: 25000 },
+      { label: "Encomendas online por mês", current: 47, target: 60 },
+    ],
+    love: [
+      { author: "@tiago.come.bem", network: "instagram", text: "Melhor centeio de Lisboa, sem discussão." },
+      { author: "@ana.lx", network: "tiktok", text: "Vim de propósito de Almada por causa deste vídeo 😍" },
+    ],
+    work: [
+      { label: "publicações", value: 19 }, { label: "vídeos TikTok", value: 6 }, { label: "mensagens respondidas", value: 88 }, { label: "sessões fotográficas", value: 1 },
+    ],
+  },
+  kinetik: {
+    headline: "O treino de 12 minutos tornou-se o vídeo mais visto de sempre da Kinetik.",
+    outcomes: [
+      { label: "Aulas experimentais marcadas", value: 64, hint: "a partir das redes e do site" },
+      { label: "Novos sócios", value: 19, hint: "vieram de uma aula experimental" },
+      { label: "Empresas interessadas", value: 3, hint: "programa de bem-estar (LinkedIn)" },
+    ],
+    estValue: 14200,
+    goals: [
+      { label: "Novos sócios no trimestre", current: 51, target: 60 },
+      { label: "Seguidores no TikTok", current: 48900, target: 50000 },
+    ],
+    love: [
+      { author: "@joao.pfit", network: "tiktok", text: "Fiz o treino de 12 min hoje e as pernas estão a tremer 😅 venha a parte 2" },
+      { author: "Helena Brás · Nordia", network: "linkedin", text: "O programa de bem-estar da Kinetik mudou a forma como a nossa equipa encara as pausas." },
+    ],
+    work: [
+      { label: "publicações", value: 24 }, { label: "Reels e TikToks", value: 9 }, { label: "mensagens respondidas", value: 102 }, { label: "artigos LinkedIn", value: 2 },
+    ],
+  },
+  atlantico: {
+    headline: "Setembro trouxe o maior número de reservas de sempre fora do verão.",
+    outcomes: [
+      { label: "Reservas de aulas", value: 41, hint: "através do link nas redes" },
+      { label: "Pedidos de informação", value: 76, hint: "mensagens e comentários" },
+      { label: "Turistas estrangeiros", value: 18, hint: "reservas em inglês" },
+    ],
+    estValue: 2870,
+    goals: [
+      { label: "Reservas em outubro", current: 12, target: 40 },
+      { label: "Seguidores no Instagram", current: 8700, target: 10000 },
+    ],
+    love: [
+      { author: "@sophie.lrnt", network: "instagram", text: "Best surf lesson ever, the instructors were amazing!" },
+      { author: "@surf.rita", network: "tiktok", text: "O meu filho não fala de outra coisa desde a aula 🏄" },
+    ],
+    work: [
+      { label: "publicações", value: 14 }, { label: "Reels", value: 5 }, { label: "mensagens respondidas", value: 57 }, { label: "vídeo institucional", value: 1 },
+    ],
+  },
+};

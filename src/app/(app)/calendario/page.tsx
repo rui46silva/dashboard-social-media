@@ -2,17 +2,16 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
-import {
-  CLIENTS, NETWORKS, NOW, POSTS, POST_STATUS, client as getClient, user,
-  type NetworkId, type Post, type PostStatus,
-} from "@/lib/data";
+import Link from "next/link";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { CLIENTS, NOW, POST_STATUS, client as getClient, type Post, type PostStatus } from "@/lib/data";
 import { dayMonth, monthName, sameDay, time, weekday } from "@/lib/format";
-import { Avatar, ClientTile, NetIcon, PageHead, PostStatusLozenge } from "@/components/ui";
+import { ClientTile, NetIcon, PageHead, PostStatusLozenge } from "@/components/ui";
 import { useSession } from "@/components/session";
+import { useStore } from "@/components/store";
+import { PostDrawer } from "@/components/post-drawer";
 
 const WEEKDAYS = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
-const LIMITS: Record<NetworkId, number> = { instagram: 2200, facebook: 63206, tiktok: 2200, linkedin: 3000 };
 
 function monthGrid(year: number, month: number) {
   const first = new Date(year, month, 1);
@@ -31,7 +30,7 @@ export default function CalendarPage() {
 function Calendar() {
   const params = useSearchParams();
   const { can } = useSession();
-  const [posts, setPosts] = useState<Post[]>(POSTS);
+  const { posts, savePost } = useStore();
   const [cursor, setCursor] = useState({ y: NOW.getFullYear(), m: NOW.getMonth() });
   const [clientFilter, setClientFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<PostStatus | null>(null);
@@ -65,21 +64,11 @@ function Calendar() {
   };
 
   const dropOn = (d: Date) => {
-    if (!dragId) return;
-    setPosts((ps) =>
-      ps.map((p) =>
-        p.id === dragId
-          ? { ...p, date: new Date(d.getFullYear(), d.getMonth(), d.getDate(), p.date.getHours(), p.date.getMinutes()) }
-          : p,
-      ),
-    );
+    const p = posts.find((x) => x.id === dragId);
+    if (!p) return;
+    savePost({ ...p, date: new Date(d.getFullYear(), d.getMonth(), d.getDate(), p.date.getHours(), p.date.getMinutes()) });
     setDragId(null);
     setOverDay(null);
-  };
-
-  const save = (p: Post) => {
-    setPosts((ps) => (ps.some((x) => x.id === p.id) ? ps.map((x) => (x.id === p.id ? p : x)) : [...ps, p]));
-    setEditing(null);
   };
 
   // Agenda (mobile): from today onwards, grouped per day.
@@ -97,13 +86,16 @@ function Calendar() {
     <>
       <PageHead
         title="Calendário editorial"
-        lede="Planeia, aprova e agenda publicações para todas as redes. Arrasta uma publicação para mudar o dia."
+        lede="Planeia e agenda publicações para todas as redes. Arrasta uma publicação para mudar o dia."
         actions={
-          can("publicar") && (
-            <button className="btn btn--primary" onClick={() => openNew(NOW)}>
-              <Plus size={15} /> Nova publicação
-            </button>
-          )
+          <>
+            <Link className="btn" href="/conteudo">Aprovações</Link>
+            {can("publicar") && (
+              <button className="btn btn--primary" onClick={() => openNew(NOW)}>
+                <Plus size={15} /> Nova publicação
+              </button>
+            )}
+          </>
         }
       />
 
@@ -131,8 +123,8 @@ function Calendar() {
       {/* Month grid — tablet and up */}
       <div className="cal-month">
         <div className="spread" style={{ marginBottom: 12 }}>
-          <h2 className="serif" style={{ fontSize: 26, fontWeight: 500, textTransform: "capitalize" }}>
-            {monthName(cursor.m)} <span className="faint">{cursor.y}</span>
+          <h2 style={{ fontSize: 18, fontWeight: 600, textTransform: "capitalize" }}>
+            {monthName(cursor.m)} {cursor.y}
           </h2>
           <div className="row">
             <button className="btn btn--sm" onClick={() => setCursor({ y: NOW.getFullYear(), m: NOW.getMonth() })}>Hoje</button>
@@ -230,171 +222,14 @@ function Calendar() {
       </div>
 
       {editing && (
-        <Composer
+        <PostDrawer
           post={editing === "new" ? null : editing}
           defaultDate={newDate}
           defaultClient={clientFilter}
           onClose={() => setEditing(null)}
-          onSave={save}
         />
       )}
     </>
   );
 }
 
-function toLocalInput(d: Date) {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-}
-
-function Composer({
-  post,
-  defaultDate,
-  defaultClient,
-  onClose,
-  onSave,
-}: {
-  post: Post | null;
-  defaultDate: Date;
-  defaultClient: string | null;
-  onClose: () => void;
-  onSave: (p: Post) => void;
-}) {
-  const { can } = useSession();
-  const [clientId, setClientId] = useState(post?.clientId ?? defaultClient ?? CLIENTS[0].id);
-  const c = getClient(clientId)!;
-  const [networks, setNetworks] = useState<NetworkId[]>(post?.networks ?? [c.networks[0]]);
-  const [caption, setCaption] = useState(post?.caption ?? "");
-  const [kind, setKind] = useState<Post["kind"]>(post?.kind ?? "Imagem");
-  const [when, setWhen] = useState(toLocalInput(post?.date ?? defaultDate));
-  const readOnly = post?.status === "publicado";
-
-  const build = (status: PostStatus): Post => ({
-    id: post?.id ?? `p${Date.now()}`,
-    clientId,
-    networks,
-    caption: caption || "Sem legenda",
-    kind,
-    date: new Date(when),
-    status,
-    author: post?.author ?? "u-rui",
-  });
-
-  const minLimit = Math.min(...networks.map((n) => LIMITS[n]));
-
-  return (
-    <>
-      <div className="sheet-backdrop" onClick={onClose} />
-      <div className="drawer" role="dialog" aria-label={post ? "Editar publicação" : "Nova publicação"}>
-        <div className="drawer__head">
-          <h2>{post ? (readOnly ? "Publicação" : "Editar publicação") : "Nova publicação"}</h2>
-          {post && <PostStatusLozenge status={post.status} />}
-          <button className="icon-btn" onClick={onClose} aria-label="Fechar"><X size={18} /></button>
-        </div>
-        <div className="drawer__body">
-          <div className="grid grid--2">
-            <label className="field">
-              <span>Cliente</span>
-              <select
-                className="input"
-                value={clientId}
-                disabled={readOnly}
-                onChange={(e) => {
-                  setClientId(e.target.value);
-                  setNetworks([getClient(e.target.value)!.networks[0]]);
-                }}
-              >
-                {CLIENTS.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-              </select>
-            </label>
-            <label className="field">
-              <span>Data e hora</span>
-              <input className="input" type="datetime-local" value={when} disabled={readOnly} onChange={(e) => setWhen(e.target.value)} />
-            </label>
-          </div>
-
-          <div className="field">
-            <span>Redes</span>
-            <div className="row" style={{ flexWrap: "wrap" }}>
-              {NETWORKS.filter((n) => c.networks.includes(n.id)).map((n) => (
-                <button
-                  key={n.id}
-                  className="chip"
-                  disabled={readOnly}
-                  aria-pressed={networks.includes(n.id)}
-                  onClick={() =>
-                    setNetworks((cur) =>
-                      cur.includes(n.id) ? (cur.length > 1 ? cur.filter((x) => x !== n.id) : cur) : [...cur, n.id],
-                    )
-                  }
-                >
-                  <span className="net__swatch" style={{ background: `var(--series-${n.slot})` }} />
-                  {n.name}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="field">
-            <span>Formato</span>
-            <div className="segmented" style={{ flexWrap: "wrap" }}>
-              {(["Imagem", "Carrossel", "Reel", "Vídeo", "Story", "Artigo"] as const).map((k) => (
-                <button key={k} aria-pressed={kind === k} disabled={readOnly} onClick={() => setKind(k)}>{k}</button>
-              ))}
-            </div>
-          </div>
-
-          <label className="field">
-            <span className="spread">
-              Legenda
-              <span className={`num ${caption.length > minLimit ? "delta--down" : "faint"}`} style={{ fontWeight: 500 }}>
-                {caption.length} / {minLimit.toLocaleString("pt-PT")}
-              </span>
-            </span>
-            <textarea
-              className="input"
-              value={caption}
-              disabled={readOnly}
-              placeholder="Escreve a legenda…"
-              onChange={(e) => setCaption(e.target.value)}
-            />
-          </label>
-
-          <div>
-            <div className="eyebrow" style={{ marginBottom: 8 }}>Pré-visualização</div>
-            <div className="preview-phone">
-              <div className="row">
-                <ClientTile clientId={clientId} size={28} />
-                <div className="grow">
-                  <div style={{ fontWeight: 650, fontSize: 13 }}>{c.name}</div>
-                  <div className="faint" style={{ fontSize: 11 }}>{new Date(when).toLocaleString("pt-PT", { dateStyle: "medium", timeStyle: "short" })}</div>
-                </div>
-                <div className="row" style={{ gap: 3 }}>{networks.map((n) => <NetIcon key={n} id={n} size={16} />)}</div>
-              </div>
-              <div className="preview-media">{kind} · arrasta ficheiros para aqui</div>
-              <p style={{ fontSize: 13, whiteSpace: "pre-wrap" }}>{caption || <span className="faint">A legenda aparece aqui.</span>}</p>
-            </div>
-          </div>
-
-          {post && (
-            <div className="row faint" style={{ fontSize: 12 }}>
-              <Avatar userId={post.author} size={20} /> Criada por {user(post.author).name}
-            </div>
-          )}
-        </div>
-        {!readOnly && (
-          <div className="drawer__foot">
-            <button className="btn btn--ghost" onClick={() => onSave(build("rascunho"))}>Guardar rascunho</button>
-            {post?.status === "aprovação" && can("aprovar") ? (
-              <button className="btn btn--primary" onClick={() => onSave(build("agendado"))}>Aprovar e agendar</button>
-            ) : can("aprovar") ? (
-              <button className="btn btn--primary" onClick={() => onSave(build("agendado"))}>Agendar</button>
-            ) : (
-              <button className="btn btn--primary" onClick={() => onSave(build("aprovação"))}>Enviar para aprovação</button>
-            )}
-          </div>
-        )}
-      </div>
-    </>
-  );
-}

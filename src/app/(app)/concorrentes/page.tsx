@@ -65,7 +65,7 @@ export default function CompetitorsPage() {
 
       <div className="card card__body" style={{ marginBottom: 8 }}>
         <div className="eyebrow">Leitura rápida</div>
-        <p className="serif" style={{ fontSize: 22, lineHeight: 1.3, marginTop: 8, maxWidth: "48ch" }}>
+        <p style={{ fontSize: 18, fontWeight: 500, lineHeight: 1.45, marginTop: 8, maxWidth: "56ch" }}>
           {me.name} tem um envolvimento de <span className="hl">{pct(me.engagement)}</span>,{" "}
           {me.engagement >= avgEng ? "acima" : "abaixo"} da média dos concorrentes ({pct(avgEng)}).{" "}
           {leader.growth > me.growth

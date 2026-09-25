@@ -1,9 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import "@fontsource-variable/schibsted-grotesk";
-import "@fontsource-variable/newsreader/opsz.css";
-import "@fontsource-variable/newsreader/opsz-italic.css";
+import "@fontsource-variable/hanken-grotesk";
 import "./globals.css";
 import { SessionProvider, themeScript } from "@/components/session";
+import { StoreProvider } from "@/components/store";
 
 export const metadata: Metadata = {
   title: { default: "Mesa", template: "%s · Mesa" },
@@ -15,8 +14,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f4f2ed" },
-    { media: "(prefers-color-scheme: dark)", color: "#121110" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#1e1f21" },
   ],
 };
 
@@ -27,7 +26,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
-        <SessionProvider>{children}</SessionProvider>
+        <SessionProvider>
+          <StoreProvider>{children}</StoreProvider>
+        </SessionProvider>
       </body>
     </html>
   );
