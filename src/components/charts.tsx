@@ -265,7 +265,7 @@ export function Heatmap({ data, rows, cols }: { data: number[][]; rows: string[]
 export function GlassBars({
   data,
   format = compact,
-  height = 150,
+  height = 136,
 }: {
   data: { label: string; value: number }[];
   format?: (n: number) => string;
@@ -274,21 +274,21 @@ export function GlassBars({
   const [active, setActive] = useState(data.length - 1);
   const max = Math.max(...data.map((d) => d.value)) || 1;
   return (
-    <div className="gbars" style={{ height: height + 28 }} role="img" aria-label={data.map((d) => `${d.label}: ${format(d.value)}`).join(", ")}>
+    <div className="gbars" style={{ height: height + 70 }} role="img" aria-label={data.map((d) => `${d.label}: ${format(d.value)}`).join(", ")}>
       {data.map((d, i) => {
         const h = Math.max(18, (d.value / max) * height);
         const on = i === active;
         return (
           <div key={d.label} className="gbars__col" onMouseEnter={() => setActive(i)} onFocus={() => setActive(i)} tabIndex={0}>
             <div className="gbars__track" style={{ height }}>
-              <div className={`gbars__bar ${on ? "is-on" : ""}`} style={{ height: h, animationDelay: `${i * 70}ms` }}>
-                {on && (
-                  <span className="gbars__tip">
-                    <i />
-                    {format(d.value)}
-                  </span>
-                )}
-              </div>
+              <div className={`gbars__bar ${on ? "is-on" : ""}`} style={{ height: h, animationDelay: `${i * 60}ms` }} />
+              {/* Sibling of the bar so the grow animation never squashes the label */}
+              {on && (
+                <span className="gbars__tip" style={{ bottom: h + 12 }}>
+                  <i />
+                  {format(d.value)}
+                </span>
+              )}
             </div>
             <span className={`gbars__label ${on ? "is-on" : ""}`}>{d.label}</span>
           </div>

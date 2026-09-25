@@ -11,6 +11,7 @@ import { compact, dayMonth, longDate, money, num, sameDay, time } from "@/lib/fo
 import { GlassBars, GradientLine } from "@/components/charts";
 import { CheckCircle, ClientTile, Due, NetIcon } from "@/components/ui";
 import { useStore } from "@/components/store";
+import { CountUp } from "@/components/count-up";
 import { useSession } from "@/components/session";
 
 const tomorrow = new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() + 1);
@@ -104,7 +105,7 @@ export default function Home() {
                 <div className="muted" style={{ fontWeight: 500 }}>Alcance total</div>
                 <div className="hero-card__value">
                   <small>≈</small>
-                  {num(total)}
+                  <CountUp value={num(total)} />
                 </div>
               </div>
               <div className="segmented" role="group" aria-label="Período">

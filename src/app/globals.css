@@ -83,6 +83,12 @@
   --r-lg: 18px;
   --r-xl: 24px;
 
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 140ms;
+  --dur: 220ms;
+  --dur-slow: 480ms;
+
   --sidebar: 236px;
   --topbar: 64px;
   --tabbar: 64px;
@@ -5015,17 +5021,16 @@ button.list-item:hover,
   display: grid;
   place-items: center;
   color: var(--ink-2);
-  transition: background 0.2s, color 0.2s, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
+  transition: background 0.2s, color 0.2s, transform 0.2s var(--ease-out), box-shadow 0.2s;
 }
 
 .rail__btn:hover {
   background: rgba(255, 255, 255, 0.55);
   color: var(--ink);
-  transform: translateY(-1px);
 }
 
 .rail__btn:active {
-  transform: scale(0.92);
+  transform: scale(0.94);
 }
 
 .rail__btn[aria-current="page"],
@@ -5063,7 +5068,6 @@ button.list-item:hover,
 
 .rail__btn--create:hover {
   background: var(--primary-hover);
-  transform: rotate(90deg);
 }
 
 .rail__badge {
@@ -5256,8 +5260,8 @@ button.list-item:hover,
 .tabs.pill-ready::before,
 .segmented.pill-ready::before {
   transition:
-    transform 0.42s cubic-bezier(0.34, 1.3, 0.64, 1),
-    width 0.42s cubic-bezier(0.34, 1.3, 0.64, 1),
+    transform 0.42s var(--ease-out),
+    width 0.42s var(--ease-out),
     height 0.3s ease;
 }
 
@@ -5290,275 +5294,6 @@ button.list-item:hover,
   scrollbar-width: none;
 }
 
-/* ==========================================================================
-   Micro-animations
-   ========================================================================== */
-
-@keyframes rise-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-}
-
-@keyframes draw {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-@keyframes grow-x {
-  from {
-    transform: scaleX(0);
-  }
-}
-
-@keyframes grow-y {
-  from {
-    transform: scaleY(0);
-  }
-}
-
-@keyframes pop {
-  0% {
-    transform: scale(0.4);
-    opacity: 0;
-  }
-  60% {
-    transform: scale(1.15);
-  }
-}
-
-@keyframes fade {
-  from {
-    opacity: 0;
-  }
-}
-
-/* Page and card entrance, staggered */
-.main {
-  animation: fade 0.3s ease-out;
-}
-
-.main > :not(.drawer):not(.sheet-backdrop):not(.sp-modal):not(.palette),
-.kpis > *,
-.grid > *,
-.gallery > *,
-.asset-grid > *,
-.board > * {
-  animation: rise-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-
-.main > :nth-child(2),
-.kpis > :nth-child(2),
-.grid > :nth-child(2),
-.board > :nth-child(2) {
-  animation-delay: 60ms;
-}
-
-.main > :nth-child(3),
-.kpis > :nth-child(3),
-.grid > :nth-child(3),
-.board > :nth-child(3) {
-  animation-delay: 120ms;
-}
-
-.main > :nth-child(4),
-.kpis > :nth-child(4),
-.grid > :nth-child(4),
-.board > :nth-child(4) {
-  animation-delay: 180ms;
-}
-
-.main > :nth-child(n + 5),
-.grid > :nth-child(n + 5),
-.board > :nth-child(n + 5) {
-  animation-delay: 240ms;
-}
-
-/* Buttons: lift on hover, press down on click */
-.btn,
-.chip,
-.icon-btn,
-.side-cta,
-.section-title a,
-.widget__head .grow + a {
-  transition:
-    transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
-    box-shadow 0.22s ease,
-    background 0.2s ease,
-    color 0.2s ease;
-}
-
-.btn:hover:not(:disabled),
-.section-title a:hover,
-.widget__head .grow + a:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 22px -12px rgba(40, 50, 110, 0.45);
-}
-
-.btn:active:not(:disabled),
-.chip:active,
-.icon-btn:active,
-.section-title a:active {
-  transform: scale(0.96);
-  transition-duration: 0.08s;
-}
-
-.btn--primary:hover:not(:disabled) {
-  box-shadow: 0 14px 28px -12px rgba(22, 24, 43, 0.6);
-}
-
-.btn svg {
-  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.btn:hover svg {
-  transform: translateX(1px) scale(1.06);
-}
-
-/* Cards: gentle hover lift where they are clickable */
-.client-card,
-.kpi,
-.ticket,
-.post-card,
-.asset,
-a.card {
-  transition:
-    transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
-    box-shadow 0.3s ease,
-    background 0.2s;
-}
-
-.client-card:hover,
-.post-card:hover,
-.asset:hover,
-a.card:hover,
-.kpi:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 24px 40px -24px rgba(50, 60, 140, 0.45);
-}
-
-.ticket:hover {
-  transform: translateY(-2px);
-}
-
-.list-item,
-.tl__row,
-.timeline-item {
-  transition: background 0.2s ease;
-}
-
-/* Charts */
-.chart-line {
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-  animation: draw 1.2s cubic-bezier(0.65, 0, 0.35, 1) forwards;
-}
-
-.chart-area {
-  animation: fade 1s 0.5s ease-out both;
-}
-
-.chart-dot {
-  animation: pop 0.25s ease-out;
-  transform-box: fill-box;
-  transform-origin: center;
-}
-
-.chart-tip {
-  animation: fade 0.15s ease-out;
-  transition: left 0.12s ease-out;
-}
-
-.bar-fill,
-.progress > i,
-.capbar i {
-  transform-origin: left center;
-  animation: grow-x 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-
-.bar-row:nth-child(2) .bar-fill {
-  animation-delay: 60ms;
-}
-
-.bar-row:nth-child(3) .bar-fill {
-  animation-delay: 120ms;
-}
-
-.bar-row:nth-child(4) .bar-fill {
-  animation-delay: 180ms;
-}
-
-.bar-row:nth-child(n + 5) .bar-fill {
-  animation-delay: 240ms;
-}
-
-.heat__cell {
-  animation: fade 0.5s ease-out both;
-  transition: transform 0.15s;
-}
-
-.heat__cell:hover {
-  transform: scale(1.08);
-}
-
-/* Checks and toggles */
-.check[aria-checked="true"] svg {
-  animation: pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.check {
-  transition: background 0.2s, border-color 0.2s, color 0.2s, transform 0.2s;
-}
-
-.check:active {
-  transform: scale(0.85);
-}
-
-.switch span {
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.tabbar a[aria-current="page"] svg {
-  animation: pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.badge-count,
-.rail__badge.is-alert,
-.nav-link .count--alert {
-  animation: pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-}
-
-.sp-modal,
-.palette {
-  animation: modal-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-@keyframes modal-in {
-  from {
-    opacity: 0;
-    transform: translate(-50%, calc(-50% + 12px)) scale(0.98);
-  }
-}
-
-@media (max-width: 859px) {
-  .sp-modal {
-    animation: rise 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
-  }
-}
-
-.palette {
-  animation-name: fade;
-}
-
-.drawer,
-.sheet-backdrop,
-.sp-modal,
-.palette,
-.flyout {
-  animation-delay: 0s !important;
-}
 
 /* Glass pill bars */
 .gbars {
@@ -5593,7 +5328,7 @@ a.card:hover,
   border: 1px solid rgba(255, 255, 255, 0.9);
   box-shadow: inset 0 -8px 16px rgba(140, 150, 220, 0.12), 0 8px 18px -12px rgba(60, 70, 150, 0.35);
   transform-origin: bottom;
-  animation: grow-y 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: grow-y 0.7s var(--ease-out) both;
   transition: background 0.3s, box-shadow 0.3s;
 }
 
@@ -5630,7 +5365,7 @@ a.card:hover,
   font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
-  animation: pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: tip-in 0.25s var(--ease-out);
 }
 
 .gbars__tip i {
@@ -5712,7 +5447,7 @@ a.card:hover,
   font-weight: 600;
   font-size: 14px;
   letter-spacing: 0.01em;
-  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s;
+  transition: transform 0.25s var(--ease-out), box-shadow 0.25s;
 }
 
 .head-pill:hover {
@@ -5791,7 +5526,7 @@ a.card:hover,
   color: var(--primary-ink);
   font-size: 12px;
   font-weight: 600;
-  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
+  transition: transform 0.22s var(--ease-out), box-shadow 0.2s;
 }
 
 .pill-link:hover {
@@ -5877,12 +5612,12 @@ a.card:hover,
   background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.45) 70%);
   border: 1px solid rgba(255, 255, 255, 0.95);
   box-shadow: 0 14px 30px -16px rgba(60, 70, 150, 0.45), inset 0 -10px 20px rgba(150, 160, 230, 0.15);
-  animation: pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: bubble-in 0.7s var(--ease-out) both;
+  transition: transform 0.4s var(--ease-out), box-shadow 0.4s var(--ease-out);
 }
 
 .bubble-stat:hover {
-  transform: translateY(-4px) scale(1.03);
+  transform: translateY(-3px);
 }
 
 .bubble-stat b {
@@ -5988,7 +5723,6 @@ a.card:hover,
 .gradient-card__btn:hover {
   background: rgba(255, 255, 255, 0.35);
   color: #fff;
-  transform: rotate(90deg);
 }
 
 /* Rows, like the reference lists */
@@ -6155,7 +5889,7 @@ a.card:hover,
   flex: none;
   font-size: 12px;
   color: var(--ink-2);
-  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.25s var(--ease-out);
 }
 
 .quick__person:hover {
@@ -6259,26 +5993,6 @@ a.card:hover,
   background: rgba(255, 255, 255, 0.08);
 }
 
-.home__main > *,
-.home__side > *,
-.home__pair > * {
-  animation: rise-in 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-
-.home__main > :nth-child(2),
-.home__side > :nth-child(2),
-.home__pair > :nth-child(2) {
-  animation-delay: 80ms;
-}
-
-.home__main > :nth-child(3),
-.home__side > :nth-child(3) {
-  animation-delay: 160ms;
-}
-
-.home__side > :nth-child(n + 4) {
-  animation-delay: 220ms;
-}
 
 .flyout {
   background: color-mix(in srgb, var(--surface-solid) 97%, transparent);
@@ -6342,4 +6056,404 @@ a.card:hover,
 :root[data-theme="dark"] .date-pill:not(.is-today),
 :root[data-theme="dark"] .status-pill:not(.is-pending) {
   color: var(--ink-2);
+}
+
+/* ==========================================================================
+   Motion
+   One easing family (ease-out-quint), short durations, no bounce.
+   Rules of thumb:
+   - Only leaf surfaces animate in; containers never fade, so the glass blur
+     never drops out mid-animation (an ancestor with opacity < 1 disables
+     backdrop-filter until it finishes).
+   - Hover feedback is colour + shadow; movement is reserved for things you
+     can click, and is at most 2px.
+   ========================================================================== */
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes grow-y {
+  from {
+    transform: scaleY(0.04);
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+@keyframes tip-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 4px);
+  }
+}
+
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.94);
+  }
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 10px));
+  }
+}
+
+/* Page entrance: the surfaces themselves, staggered among siblings */
+.card,
+.kpi,
+.list,
+.table-wrap,
+.client-card,
+.column,
+.tl,
+.cal,
+.mini-meter,
+.tip,
+.asset,
+.post-card,
+.love,
+.approval-card,
+.feed__phone,
+.sla-strip,
+.outcome,
+.head-pill,
+.hero-stats {
+  animation: enter var(--dur-slow) var(--ease-out) both;
+}
+
+:is(.card, .kpi, .list, .table-wrap, .client-card, .column, .tl, .asset, .post-card, .outcome):nth-child(2) {
+  animation-delay: 50ms;
+}
+
+:is(.card, .kpi, .list, .table-wrap, .client-card, .column, .tl, .asset, .post-card, .outcome):nth-child(3) {
+  animation-delay: 100ms;
+}
+
+:is(.card, .kpi, .list, .table-wrap, .client-card, .column, .tl, .asset, .post-card, .outcome):nth-child(4) {
+  animation-delay: 150ms;
+}
+
+:is(.card, .kpi, .list, .table-wrap, .client-card, .column, .tl, .asset, .post-card, .outcome):nth-child(n + 5) {
+  animation-delay: 200ms;
+}
+
+/* Overlays have their own motion and never wait for a stagger */
+.drawer,
+.sheet,
+.sheet-backdrop,
+.sp-modal,
+.palette,
+.flyout,
+.popover {
+  animation-delay: 0s !important;
+}
+
+.drawer {
+  animation-duration: 0.32s;
+  animation-timing-function: var(--ease-out);
+}
+
+.sp-modal {
+  animation: modal-in 0.3s var(--ease-out);
+}
+
+@media (max-width: 859px) {
+  .sp-modal {
+    animation: rise 0.3s var(--ease-out);
+  }
+}
+
+.palette {
+  animation: fade 0.18s var(--ease-out);
+}
+
+.sheet-backdrop {
+  animation: fade 0.2s var(--ease-out);
+}
+
+/* Buttons and pills: colour + shadow on hover, a small press on click */
+.btn,
+.chip,
+.pill-link,
+.icon-btn,
+.side-cta,
+.head-pill,
+.section-title a,
+.widget__head .grow + a,
+.rail__btn,
+.segmented button,
+.tab,
+.flyout__link,
+.quick__person,
+.rows__item,
+.list-item,
+.tl__row,
+.timeline-item {
+  transition:
+    background-color var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-out),
+    opacity var(--dur) var(--ease-out);
+}
+
+.btn:hover:not(:disabled),
+.pill-link:hover,
+.section-title a:hover,
+.widget__head .grow + a:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px -10px rgba(40, 50, 110, 0.4);
+}
+
+.btn--primary:hover:not(:disabled),
+.pill-link:hover {
+  box-shadow: 0 10px 22px -10px rgba(22, 24, 43, 0.55);
+}
+
+.btn:active:not(:disabled),
+.chip:active,
+.pill-link:active,
+.icon-btn:active,
+.head-pill:active,
+.section-title a:active,
+.quick__person:active {
+  transform: scale(0.97);
+  transition-duration: var(--dur-fast);
+}
+
+.flyout__link:hover {
+  transform: none;
+}
+
+.quick__person:hover {
+  transform: none;
+}
+
+/* Clickable surfaces lift a little; static ones don't move */
+a.card,
+.client-card,
+.head-pill,
+.mini-meter,
+.ticket {
+  transition:
+    transform var(--dur) var(--ease-out),
+    box-shadow var(--dur) var(--ease-out),
+    background-color var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out);
+}
+
+a.card:hover,
+.client-card:hover,
+.head-pill:hover,
+.mini-meter:hover,
+.ticket:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 36px -22px rgba(50, 60, 140, 0.45);
+}
+
+.kpi:hover,
+.post-card:hover,
+.asset:hover {
+  transform: none;
+}
+
+/* Sliding pill */
+.tabs.pill-ready::before,
+.segmented.pill-ready::before {
+  transition:
+    transform 0.38s var(--ease-out),
+    width 0.38s var(--ease-out),
+    height 0.3s var(--ease-out);
+}
+
+/* Charts */
+.chart-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: draw 1s var(--ease-in-out) 0.1s forwards;
+}
+
+.chart-area {
+  animation: fade 0.8s var(--ease-out) 0.5s both;
+}
+
+.chart-dot {
+  animation: pop 0.18s var(--ease-out);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.chart-tip {
+  animation: fade 0.15s var(--ease-out);
+}
+
+.bar-fill,
+.progress > i,
+.capbar i {
+  transform-origin: left center;
+  animation: grow-x 0.8s var(--ease-out) 0.15s both;
+}
+
+.bar-row:nth-child(2) .bar-fill {
+  animation-delay: 0.2s;
+}
+
+.bar-row:nth-child(3) .bar-fill {
+  animation-delay: 0.25s;
+}
+
+.bar-row:nth-child(4) .bar-fill {
+  animation-delay: 0.3s;
+}
+
+.bar-row:nth-child(n + 5) .bar-fill {
+  animation-delay: 0.35s;
+}
+
+.gbars__bar {
+  transition: background var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out);
+}
+
+.heat__cell {
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+
+.heat__cell:hover {
+  transform: scale(1.06);
+}
+
+/* Small confirmations */
+.check {
+  transition:
+    background-color var(--dur) var(--ease-out),
+    border-color var(--dur) var(--ease-out),
+    color var(--dur) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.check[aria-checked="true"] svg {
+  animation: pop 0.22s var(--ease-out);
+}
+
+.check:active {
+  transform: scale(0.88);
+}
+
+.switch span {
+  transition: transform 0.28s var(--ease-out);
+}
+
+.switch {
+  transition: background-color var(--dur) var(--ease-out);
+}
+
+.tip__more {
+  animation: rise-in 0.3s var(--ease-out) both;
+}
+
+.flyout {
+  animation: flyout-in 0.2s var(--ease-out);
+}
+
+.rail__tip {
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+
+.timer-pill__dot {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .chart-line {
+    stroke-dashoffset: 0;
+  }
+}
+
+.gbars {
+  padding-top: 0;
+}
+
+.gbars__track {
+  position: relative;
+}
+
+.gbars__tip {
+  top: auto;
+  left: 50%;
+  transform: translateX(-50%);
+  animation: tip-in 0.25s var(--ease-out) 0.35s both;
+}
+
+.gbars__tip i {
+  top: calc(100% + 4px);
+}
+
+/* Reveal bars with a clip instead of scaling, so rounded ends stay round */
+@keyframes reveal-up {
+  from {
+    clip-path: inset(100% 0 0 0 round 16px);
+  }
+  to {
+    clip-path: inset(0 0 0 0 round 16px);
+  }
+}
+
+@keyframes reveal-right {
+  from {
+    clip-path: inset(0 100% 0 0 round 6px);
+  }
+  to {
+    clip-path: inset(0 0 0 0 round 6px);
+  }
+}
+
+.gbars__bar {
+  animation-name: reveal-up;
+  animation-duration: 0.8s;
+}
+
+.bar-fill,
+.progress > i,
+.capbar i {
+  animation-name: reveal-right;
 }
