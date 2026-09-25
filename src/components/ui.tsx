@@ -1,6 +1,6 @@
 import { ArrowDownRight, ArrowUpRight, Check, FileText, Film, Images, Image as ImageIcon, Minus, Smartphone } from "lucide-react";
 import type { ReactNode } from "react";
-import { NOW, POST_STATUS, client as getClient, network, user as getUser, type NetworkId, type Post, type PostStatus } from "@/lib/data";
+import { ASSET_SRC, NOW, POST_STATUS, client as getClient, network, user as getUser, type NetworkId, type Post, type PostStatus } from "@/lib/data";
 import { dayMonth, initials, sameDay, signedPct } from "@/lib/format";
 
 export function PageHead({
@@ -174,8 +174,20 @@ const KIND_ICON = { Reel: Film, Vídeo: Film, Carrossel: Images, Imagem: ImageIc
  * Stand-in for the creative until real media is uploaded: a tinted tile in the
  * client's colour with the format, so previews feel like posts, not rows.
  */
-export function PostThumb({ post, className = "preview-media", label = true }: { post: Pick<Post, "id" | "clientId" | "kind">; className?: string; label?: boolean }) {
+export function PostThumb({ post, className = "preview-media", label = true }: { post: Pick<Post, "id" | "clientId" | "kind"> & { assetIds?: string[] }; className?: string; label?: boolean }) {
   const c = getClient(post.clientId)!;
+  const img = post.assetIds?.map((id) => ASSET_SRC[id]).find(Boolean);
+  if (img) {
+    return (
+      <div className={className} style={{ background: `center / cover no-repeat url("${img}")` }}>
+        {label && (
+          <span className="row thumb-label" style={{ gap: 6, position: "absolute", left: 10, bottom: 10, fontSize: 12, fontWeight: 600 }}>
+            {post.kind}
+          </span>
+        )}
+      </div>
+    );
+  }
   const n = post.id.split("").reduce((a, ch) => a + ch.charCodeAt(0), 0);
   const shift = (n % 5) * 14 - 28;
   const Icon = KIND_ICON[post.kind];

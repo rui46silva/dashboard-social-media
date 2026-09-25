@@ -88,7 +88,7 @@ export function ClientForm({ clientId, onClose }: { clientId?: string; onClose: 
       clientId: id,
       team: Array.from(new Set([base.manager, base.inboxOwner, ...p.team])),
     };
-    saveClient(finalBase, finalProfile);
+    saveClient(finalBase, finalProfile, !existing);
     onClose();
     if (!existing) router.push(`/clientes/${id}`);
   };
@@ -256,6 +256,19 @@ export function ClientForm({ clientId, onClose }: { clientId?: string; onClose: 
                 </label>
               </div>
               <p className="faint" style={{ fontSize: 12, marginTop: -8 }}>Só esta pessoa recebe os comentários e mensagens deste cliente.</p>
+              <div className="field">
+                <span>Avisar o cliente de publicações para aprovar por</span>
+                <div className="row" style={{ flexWrap: "wrap" }}>
+                  {(["email", "whatsapp"] as const).map((ch) => {
+                    const on = p.notify?.[ch] ?? true;
+                    return (
+                      <button key={ch} className="chip" aria-pressed={on} onClick={() => setP({ ...p, notify: { email: p.notify?.email ?? true, whatsapp: p.notify?.whatsapp ?? true, [ch]: !on } })}>
+                        {on && <Check size={13} />} {ch === "email" ? "Email" : "WhatsApp"}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <div className="field">
                 <span>Equipa</span>
                 <div className="row" style={{ flexWrap: "wrap" }}>

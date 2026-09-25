@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
-  CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, KanbanSquare, List, MessageSquare,
+  CalendarDays, Check, ChevronDown, Clock, ChevronLeft, ChevronRight, KanbanSquare, List, MessageSquare,
   Plus, Search, ThumbsUp, Trash2, X, GitBranch,
 } from "lucide-react";
 import {
@@ -14,6 +14,7 @@ import { ago, monthName, sameDay } from "@/lib/format";
 import { Avatar, CheckCircle, ClientTile, Due, PageHead } from "@/components/ui";
 import { useStore } from "@/components/store";
 import { useSession } from "@/components/session";
+import { TaskTime, hm } from "@/components/time";
 
 type View = "lista" | "quadro" | "calendario";
 type Scope = "minhas" | "todas";
@@ -183,6 +184,8 @@ function Tasks() {
 }
 
 function TaskRow({ task: t, selected, onOpen, onToggle }: { task: Task; selected: boolean; onOpen: () => void; onToggle: () => void }) {
+  const { time } = useStore();
+  const tracked = (id: string) => time.filter((e) => e.taskId === id).reduce((a, e) => a + e.minutes, 0);
   const subDone = t.subtasks.filter((s) => s.done).length;
   return (
     <div className="tl__row" aria-selected={selected} onClick={onOpen}>
@@ -198,6 +201,9 @@ function TaskRow({ task: t, selected, onOpen, onToggle }: { task: Task; selected
           )}
           {t.likes.length > 0 && (
             <span title="Gostos"><ThumbsUp size={12} />{t.likes.length}</span>
+          )}
+          {tracked(t.id) > 0 && (
+            <span title="Tempo registado"><Clock size={12} />{hm(tracked(t.id))}{t.estimate ? `/${t.estimate}h` : ""}</span>
           )}
         </span>
       </div>
@@ -476,6 +482,8 @@ function TaskPane({ task, onClose }: { task: Task; onClose: () => void }) {
               {task.tags.length ? task.tags.map((t) => <span key={t} className="tag">{t}</span>) : <span className="faint">—</span>}
             </dd>
           </dl>
+
+          <TaskTime task={task} onEstimate={(h) => set({ estimate: h })} />
 
           <div className="field">
             <span>Descrição</span>

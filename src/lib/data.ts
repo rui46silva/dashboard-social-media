@@ -326,6 +326,8 @@ export type Post = {
   /** Rounds of client changes requested so far. */
   rounds: number;
   comments: PostComment[];
+  /** Files from the client's library used in this post. */
+  assetIds?: string[];
 };
 
 const POST_SEEDS: [string, NetworkId[], number, number, Post["kind"], string, PostStatus?][] = [
@@ -404,6 +406,9 @@ export type InboxItem = {
   context?: string;
   date: Date;
   unread: boolean;
+  /** Has the agency replied yet? Drives the response-time alerts. */
+  answered?: boolean;
+  answeredAt?: Date;
   sentiment: "positivo" | "neutro" | "negativo";
   thread?: { from: "them" | "us"; text: string; date: Date }[];
 };
@@ -441,7 +446,7 @@ export const INBOX: InboxItem[] = [
     id: "m5", clientId: "kinetik", network: "linkedin", kind: "menção",
     author: "Helena Brás", handle: "Helena Brás · RH na Nordia",
     text: "O programa de bem-estar da @Kinetik Fitness mudou a forma como a nossa equipa encara as pausas.",
-    date: daysAgo(1, 16, 20), unread: false, sentiment: "positivo",
+    date: daysAgo(1, 16, 20), unread: false, sentiment: "positivo", answered: true, answeredAt: daysAgo(1, 17, 5),
   },
   {
     id: "m6", clientId: "orvalho", network: "instagram", kind: "comentário",
@@ -454,7 +459,7 @@ export const INBOX: InboxItem[] = [
     id: "m7", clientId: "casa-lume", network: "instagram", kind: "mensagem",
     author: "Atelier Fonte", handle: "@atelierfonte",
     text: "Somos um gabinete de arquitetura e gostávamos de falar sobre uma parceria para um projeto de hotel.",
-    date: daysAgo(1, 10, 40), unread: false, sentiment: "positivo",
+    date: daysAgo(1, 10, 40), unread: false, sentiment: "positivo", answered: true, answeredAt: daysAgo(1, 11, 2),
     thread: [
       { from: "them", text: "Somos um gabinete de arquitetura e gostávamos de falar sobre uma parceria para um projeto de hotel.", date: daysAgo(1, 10, 40) },
       { from: "us", text: "Olá! Que bom. Podem enviar-nos um email para projetos@casalume.pt com os detalhes?", date: daysAgo(1, 11, 2) },
@@ -633,6 +638,8 @@ export type Task = {
   collaborators: string[];
   tags: string[];
   createdBy: string;
+  /** Estimated hours. */
+  estimate?: number;
 };
 
 const st = (id: string, title: string, done = false): Subtask => ({ id, title, done });
@@ -729,7 +736,8 @@ export type Permission =
   | "gerir_utilizadores"
   | "integracoes"
   | "faturacao"
-  | "empresa";
+  | "empresa"
+  | "seguranca";
 
 export const PERMISSIONS: { id: Permission; label: string; hint: string }[] = [
   { id: "ver_dashboard", label: "Ver métricas", hint: "Painéis de redes, site e negócio" },
@@ -744,6 +752,7 @@ export const PERMISSIONS: { id: Permission; label: string; hint: string }[] = [
   { id: "integracoes", label: "Integrações e API", hint: "Chaves, webhooks, ligações" },
   { id: "faturacao", label: "Faturação", hint: "Plano e pagamentos" },
   { id: "empresa", label: "Gestão da empresa", hint: "Finanças, break-even, cenários e riscos" },
+  { id: "seguranca", label: "Segurança e RGPD", hint: "Registo de atividade, 2FA, exportar e apagar dados" },
 ];
 
 export type Role = { id: RoleId; name: string; description: string; system: boolean; permissions: Permission[] };
@@ -758,7 +767,7 @@ export const ROLES: Role[] = [
   },
   {
     id: "dev", name: "Dev", description: "Integrações, dados e manutenção.", system: true,
-    permissions: ["ver_dashboard", "tarefas", "gerir_clientes", "gerir_utilizadores", "integracoes"],
+    permissions: ["ver_dashboard", "tarefas", "gerir_clientes", "gerir_utilizadores", "integracoes", "seguranca"],
   },
   {
     id: "gestor", name: "Gestor de conta", description: "Dono da relação com o cliente.", system: false,
@@ -785,17 +794,21 @@ export type User = {
   clients: string[]; // client ids they work on ("*" = all)
   status: "ativo" | "convidado";
   lastSeen: Date;
+  /** Hours per week available for client work (after admin, sales, meetings). */
+  weeklyHours: number;
+  /** Two-factor authentication enabled. */
+  twoFactor: boolean;
 };
 
 export const USERS: User[] = [
-  { id: "u-rui", name: "Rui Silva", email: "rui@agencia.pt", role: "ceo", title: "Fundador", clients: ["*"], status: "ativo", lastSeen: daysAgo(0, 10, 28) },
-  { id: "u-ana", name: "Ana Rocha", email: "ana@agencia.pt", role: "gestor", title: "Gestora de conta", clients: ["casa-lume", "kinetik"], status: "ativo", lastSeen: daysAgo(0, 10, 5) },
-  { id: "u-tiago", name: "Tiago Neves", email: "tiago@agencia.pt", role: "gestor", title: "Gestor de conta", clients: ["orvalho", "atlantico"], status: "ativo", lastSeen: daysAgo(0, 9, 40) },
-  { id: "u-ines", name: "Inês Carvalho", email: "ines@agencia.pt", role: "designer", title: "Designer e vídeo", clients: ["*"], status: "ativo", lastSeen: daysAgo(0, 8, 55) },
-  { id: "u-pedro", name: "Pedro Almeida", email: "pedro@agencia.pt", role: "dev", title: "Programador", clients: ["*"], status: "ativo", lastSeen: daysAgo(1, 18) },
-  { id: "u-sara", name: "Sara Lopes", email: "sara@agencia.pt", role: "rh", title: "Pessoas e operações", clients: [], status: "ativo", lastSeen: daysAgo(2, 12) },
-  { id: "u-marco", name: "Marco Teixeira", email: "marco@kinetik.fit", role: "cliente", title: "CEO · Kinetik", clients: ["kinetik"], status: "ativo", lastSeen: daysAgo(3, 21) },
-  { id: "u-filipa", name: "Filipa Costa", email: "filipa@orvalho.pt", role: "cliente", title: "Sócia · Orvalho", clients: ["orvalho"], status: "convidado", lastSeen: daysAgo(30) },
+  { id: "u-rui", name: "Rui Silva", email: "rui@agencia.pt", role: "ceo", title: "Fundador", clients: ["*"], status: "ativo", lastSeen: daysAgo(0, 10, 28), weeklyHours: 8, twoFactor: true },
+  { id: "u-ana", name: "Ana Rocha", email: "ana@agencia.pt", role: "gestor", title: "Gestora de conta", clients: ["casa-lume", "kinetik"], status: "ativo", lastSeen: daysAgo(0, 10, 5), weeklyHours: 20, twoFactor: true },
+  { id: "u-tiago", name: "Tiago Neves", email: "tiago@agencia.pt", role: "gestor", title: "Gestor de conta", clients: ["orvalho", "atlantico"], status: "ativo", lastSeen: daysAgo(0, 9, 40), weeklyHours: 22, twoFactor: false },
+  { id: "u-ines", name: "Inês Carvalho", email: "ines@agencia.pt", role: "designer", title: "Designer e vídeo", clients: ["*"], status: "ativo", lastSeen: daysAgo(0, 8, 55), weeklyHours: 24, twoFactor: true },
+  { id: "u-pedro", name: "Pedro Almeida", email: "pedro@agencia.pt", role: "dev", title: "Programador", clients: ["*"], status: "ativo", lastSeen: daysAgo(1, 18), weeklyHours: 10, twoFactor: true },
+  { id: "u-sara", name: "Sara Lopes", email: "sara@agencia.pt", role: "rh", title: "Pessoas e operações", clients: [], status: "ativo", lastSeen: daysAgo(2, 12), weeklyHours: 0, twoFactor: false },
+  { id: "u-marco", name: "Marco Teixeira", email: "marco@kinetik.fit", role: "cliente", title: "CEO · Kinetik", clients: ["kinetik"], status: "ativo", lastSeen: daysAgo(3, 21), weeklyHours: 0, twoFactor: false },
+  { id: "u-filipa", name: "Filipa Costa", email: "filipa@orvalho.pt", role: "cliente", title: "Sócia · Orvalho", clients: ["orvalho"], status: "convidado", lastSeen: daysAgo(30), weeklyHours: 0, twoFactor: false },
 ];
 export const user = (id: string) => USERS.find((u) => u.id === id)!;
 
@@ -959,6 +972,8 @@ export type ClientProfile = {
   avoid: string;
   competitors: string;
   notes: string;
+  /** How the client is told there is something to approve. */
+  notify?: { email: boolean; whatsapp: boolean };
 };
 
 export const PROFILES: Record<string, ClientProfile> = {
@@ -1112,3 +1127,268 @@ export const ROLE_USER: Record<RoleId, string> = {
   designer: "u-ines",
   cliente: "u-marco",
 };
+
+/* ---------------------------------------------------------- Time tracking */
+
+export type TimeEntry = {
+  id: string;
+  userId: string;
+  clientId?: string; // undefined = internal (sales, admin)
+  taskId?: string;
+  date: Date;
+  minutes: number;
+  note: string;
+  billable: boolean;
+};
+
+const ACTIVITIES: Record<string, string[]> = {
+  "u-rui": ["Reunião de acompanhamento", "Revisão de estratégia", "Aprovação de conteúdos"],
+  "u-ana": ["Planeamento editorial", "Reunião com cliente", "Gestão de comunidade", "Relatório"],
+  "u-tiago": ["Planeamento editorial", "Gestão de comunidade", "Copy e legendas", "Reunião com cliente"],
+  "u-ines": ["Design de carrossel", "Edição de Reel", "Sessão fotográfica", "Tratamento de imagem"],
+  "u-pedro": ["Integração de contas", "Configuração GA4"],
+};
+
+/** ~4 weeks of entries, in line with each client's monthly hours. */
+export const TIME_ENTRIES: TimeEntry[] = (() => {
+  const r = seeded(4242);
+  const out: TimeEntry[] = [];
+  const teams: Record<string, string[]> = {
+    "casa-lume": ["u-ana", "u-ines", "u-rui"],
+    orvalho: ["u-tiago", "u-ines"],
+    kinetik: ["u-ana", "u-tiago", "u-ines"],
+    atlantico: ["u-tiago", "u-ines"],
+  };
+  const monthly: Record<string, number> = { "casa-lume": 41, orvalho: 36, kinetik: 55, atlantico: 34 };
+  let n = 0;
+  for (let d = 27; d >= 0; d--) {
+    const day = daysAgo(d, 9);
+    if (day.getDay() === 0 || day.getDay() === 6) continue;
+    for (const [clientId, team] of Object.entries(teams)) {
+      const perDay = (monthly[clientId] / 20) * 60 * (0.6 + r() * 0.8);
+      const who = team[Math.floor(r() * team.length)];
+      out.push({
+        id: `te${n++}`, userId: who, clientId, date: day, minutes: Math.round(perDay / 15) * 15 || 15,
+        note: ACTIVITIES[who][Math.floor(r() * ACTIVITIES[who].length)], billable: true,
+      });
+    }
+    // internal time
+    out.push({ id: `te${n++}`, userId: "u-rui", date: day, minutes: 90 + Math.round(r() * 8) * 15, note: "Comercial e propostas", billable: false });
+    if (d % 2 === 0) out.push({ id: `te${n++}`, userId: "u-pedro", date: day, minutes: 120 + Math.round(r() * 8) * 15, note: "Desenvolvimento da Mesa", billable: false });
+  }
+  out.push({ id: `te${n++}`, userId: "u-ines", clientId: "casa-lume", taskId: "t3", date: daysAgo(1, 15), minutes: 150, note: "Montagem do Reel", billable: true });
+  out.push({ id: `te${n++}`, userId: "u-rui", taskId: "t4", date: daysAgo(1, 11), minutes: 120, note: "Diagnóstico Serra Alta", billable: false });
+  return out;
+})();
+
+/** Estimated hours on seed tasks. */
+for (const [id, h] of Object.entries({ t1: 1, t2: 0.5, t3: 6, t4: 5, t5: 3, t6: 4, t7: 8, t8: 4, t9: 1.5, t10: 6, t13: 2 })) {
+  const t = TASKS.find((x) => x.id === id);
+  if (t) t.estimate = h;
+}
+
+/* -------------------------------------------------------------- Proposals */
+
+export type ProposalItem = { id: string; service: string; description: string; price: number; recurring: boolean };
+export type ProposalStatus = "rascunho" | "enviada" | "vista" | "aceite" | "recusada";
+
+export type Proposal = {
+  id: string;
+  dealId?: string;
+  company: string;
+  sector: string;
+  city: string;
+  contactName: string;
+  contactEmail: string;
+  title: string;
+  intro: string;
+  items: ProposalItem[];
+  months: number; // contract length
+  validUntil: Date;
+  status: ProposalStatus;
+  createdBy: string;
+  sentAt?: Date;
+  viewedAt?: Date;
+  signedAt?: Date;
+  signedBy?: string;
+  clientId?: string; // set once converted
+};
+
+export const PROPOSAL_STATUS: Record<ProposalStatus, string> = {
+  rascunho: "Rascunho",
+  enviada: "Enviada",
+  vista: "Vista pelo cliente",
+  aceite: "Aceite e assinada",
+  recusada: "Recusada",
+};
+
+/** Price list the proposal editor starts from. */
+export const PRICE_LIST: { service: string; description: string; price: number; recurring: boolean }[] = [
+  { service: "Gestão de redes sociais", description: "Planeamento, publicação e gestão de 2 redes", price: 650, recurring: true },
+  { service: "Criação de conteúdo", description: "12 publicações/mês com design e copy", price: 450, recurring: true },
+  { service: "Vídeo e Reels", description: "4 Reels/mês com edição", price: 350, recurring: true },
+  { service: "Gestão de comunidade (inbox)", description: "Resposta a comentários e mensagens em dias úteis", price: 200, recurring: true },
+  { service: "Anúncios pagos", description: "Gestão de campanhas (investimento à parte)", price: 300, recurring: true },
+  { service: "Relatórios mensais", description: "Relatório com análise e próximos passos", price: 100, recurring: true },
+  { service: "Sessão fotográfica", description: "Meio dia de produção + 30 fotos tratadas", price: 600, recurring: false },
+  { service: "Arranque e diagnóstico", description: "Auditoria das redes, estratégia e guia de marca", price: 700, recurring: false },
+];
+
+export const PROPOSALS: Proposal[] = [
+  {
+    id: "pr1", dealId: "d1", company: "Vinhos Serra Alta", sector: "Vinhos", city: "Viseu",
+    contactName: "Carolina Pinto", contactEmail: "carolina@serraalta.pt",
+    title: "Redes sociais e campanha de vindimas",
+    intro: "Propomos dar à Serra Alta uma presença consistente no Instagram e Facebook, com foco no enoturismo e na venda online, e uma campanha especial para as vindimas.",
+    items: [
+      { id: "i1", ...PRICE_LIST[0] },
+      { id: "i2", ...PRICE_LIST[1] },
+      { id: "i3", service: "Relatórios mensais", description: "Relatório com análise e próximos passos", price: 100, recurring: true },
+      { id: "i4", ...PRICE_LIST[7] },
+    ],
+    months: 12, validUntil: daysFromNow(14), status: "vista", createdBy: "u-rui",
+    sentAt: daysAgo(2, 16), viewedAt: daysAgo(0, 9, 5),
+  },
+  {
+    id: "pr2", dealId: "d3", company: "Nordia Software", sector: "Tecnologia", city: "Lisboa",
+    contactName: "Helena Brás", contactEmail: "helena@nordia.io",
+    title: "Employer branding no LinkedIn",
+    intro: "Um programa de 6 meses para posicionar a Nordia como o sítio onde os bons engenheiros querem trabalhar.",
+    items: [
+      { id: "i1", service: "Gestão de redes sociais", description: "LinkedIn da empresa + 3 porta-vozes", price: 900, recurring: true },
+      { id: "i2", ...PRICE_LIST[2] },
+      { id: "i3", ...PRICE_LIST[6] },
+    ],
+    months: 6, validUntil: daysFromNow(20), status: "rascunho", createdBy: "u-rui",
+  },
+  {
+    id: "pr3", company: "Ótica Visão Clara", sector: "Retalho", city: "Setúbal",
+    contactName: "Joana Serrão", contactEmail: "joana@visaoclara.pt",
+    title: "Reativação das redes", intro: "", items: [{ id: "i1", ...PRICE_LIST[0] }],
+    months: 12, validUntil: daysAgo(10), status: "recusada", createdBy: "u-ana", sentAt: daysAgo(30),
+  },
+];
+
+/* ------------------------------------------------------------- Onboarding */
+
+export const ONBOARDING: { title: string; role: "gestor" | "dev" | "designer" | "ceo"; day: number; description: string }[] = [
+  { title: "Reunião de arranque com o cliente", role: "gestor", day: 1, description: "Objetivos, público, concorrentes, quem aprova e como." },
+  { title: "Pedir acessos às redes e ao GA4", role: "dev", day: 2, description: "Acesso de parceiro no Meta Business, TikTok e LinkedIn; leitor no GA4." },
+  { title: "Ligar contas na Mesa", role: "dev", day: 3, description: "Confirmar que as métricas estão a importar." },
+  { title: "Recolher logótipos, fotos e manual de marca", role: "designer", day: 3, description: "Guardar tudo na biblioteca de ficheiros do cliente." },
+  { title: "Auditoria das redes atuais", role: "gestor", day: 5, description: "O que funciona, o que não funciona, benchmark de concorrentes." },
+  { title: "Guia de marca e tom de voz", role: "designer", day: 7, description: "Paleta, tipografia, estilos de fotografia e exemplos de copy." },
+  { title: "Calendário editorial do primeiro mês", role: "gestor", day: 8, description: "Enviar para aprovação no portal." },
+  { title: "Convidar o cliente para o portal", role: "gestor", day: 8, description: "Mostrar como aprovar posts e ver resultados." },
+  { title: "Primeira fatura e contrato assinado arquivados", role: "ceo", day: 10, description: "Confirmar dados de faturação e dia de pagamento." },
+];
+
+/* -------------------------------------------------------------- Assets */
+
+export type AssetKind = "logo" | "foto" | "video" | "manual" | "fonte" | "documento";
+export const ASSET_KINDS: Record<AssetKind, string> = {
+  logo: "Logótipos", foto: "Fotografias", video: "Vídeos", manual: "Manual de marca", fonte: "Tipografia", documento: "Documentos",
+};
+
+export type Asset = {
+  id: string;
+  clientId: string;
+  name: string;
+  kind: AssetKind;
+  size: number; // bytes
+  uploadedBy: string;
+  date: Date;
+  tags: string[];
+  /** Image data (data: URL) for files uploaded in this browser; seed files have none. */
+  src?: string;
+};
+
+export const ASSETS: Asset[] = (() => {
+  const base: [AssetKind, string, number, string[]][] = [
+    ["logo", "logotipo-principal.svg", 24_000, ["logo"]],
+    ["logo", "logotipo-branco.png", 88_000, ["logo", "fundo escuro"]],
+    ["manual", "manual-de-marca-2025.pdf", 4_200_000, ["marca"]],
+    ["fonte", "tipografia-titulos.zip", 1_300_000, ["marca"]],
+    ["foto", "sessao-setembro-01.jpg", 3_400_000, ["produto"]],
+    ["foto", "sessao-setembro-02.jpg", 3_100_000, ["equipa"]],
+    ["foto", "sessao-setembro-03.jpg", 2_900_000, ["espaço"]],
+    ["video", "bruto-reel-outubro.mp4", 186_000_000, ["reel"]],
+    ["documento", "contrato-assinado.pdf", 310_000, ["contrato"]],
+  ];
+  return CLIENTS.flatMap((c, ci) =>
+    base.map(([kind, name, size, tags], i) => ({
+      id: `a-${c.id}-${i}`, clientId: c.id, name, kind, size, tags,
+      uploadedBy: ["u-ines", "u-ana", "u-tiago"][(i + ci) % 3], date: daysAgo(5 + i * 6 + ci, 11),
+    })),
+  );
+})();
+
+/* ------------------------------------------------ Approval notifications */
+
+export type Notification = {
+  id: string;
+  channel: "email" | "whatsapp";
+  clientId: string;
+  postIds: string[];
+  to: string;
+  subject: string;
+  body: string;
+  sentAt: Date;
+  status: "enviada" | "aberta" | "respondida";
+};
+
+/* ------------------------------------------------------------------ NPS */
+
+export type NpsResponse = { id: string; clientId: string; by: string; score: number; comment: string; date: Date };
+
+export const NPS: NpsResponse[] = [
+  { id: "n1", clientId: "kinetik", by: "Marco Teixeira", score: 9, comment: "Os Reels estão a trazer muita gente às aulas experimentais.", date: daysAgo(55) },
+  { id: "n2", clientId: "kinetik", by: "Marco Teixeira", score: 10, comment: "", date: daysAgo(24) },
+  { id: "n3", clientId: "casa-lume", by: "Sofia Mendes", score: 8, comment: "Gostava de ver os relatórios mais cedo no mês.", date: daysAgo(56) },
+  { id: "n4", clientId: "casa-lume", by: "Sofia Mendes", score: 9, comment: "O lançamento da Maré correu muito bem.", date: daysAgo(23) },
+  { id: "n5", clientId: "orvalho", by: "Filipa Costa", score: 7, comment: "", date: daysAgo(54) },
+  { id: "n6", clientId: "orvalho", by: "Filipa Costa", score: 6, comment: "As fotos às vezes não mostram bem o pão. Queremos mais bastidores.", date: daysAgo(22) },
+  { id: "n7", clientId: "atlantico", by: "Nuno Ferraz", score: 8, comment: "", date: daysAgo(57) },
+  { id: "n8", clientId: "atlantico", by: "Nuno Ferraz", score: 7, comment: "Precisamos de mais reservas fora da época alta.", date: daysAgo(21) },
+];
+
+export const npsScore = (xs: { score: number }[]) => {
+  if (!xs.length) return 0;
+  const promoters = xs.filter((x) => x.score >= 9).length;
+  const detractors = xs.filter((x) => x.score <= 6).length;
+  return Math.round(((promoters - detractors) / xs.length) * 100);
+};
+
+/* ------------------------------------------------ Inbox response times */
+
+/** Last 30 days of replies, per client (from the networks' APIs in production). */
+export const RESPONSE_STATS: Record<string, { replies: number; avgMinutes: number; within4h: number }> = {
+  "casa-lume": { replies: 64, avgMinutes: 142, within4h: 0.81 },
+  orvalho: { replies: 91, avgMinutes: 96, within4h: 0.9 },
+  kinetik: { replies: 108, avgMinutes: 71, within4h: 0.95 },
+  atlantico: { replies: 58, avgMinutes: 263, within4h: 0.62 },
+};
+export const SLA_MINUTES = 4 * 60;
+
+/* ------------------------------------------------------------ Audit log */
+
+export type AuditEntry = { id: string; at: Date; who: string; action: string; target: string; ip: string };
+
+export const AUDIT: AuditEntry[] = [
+  { id: "l1", at: daysAgo(0, 10, 28), who: "u-rui", action: "Iniciou sessão", target: "Chrome · macOS", ip: "85.244.12.x" },
+  { id: "l2", at: daysAgo(0, 9, 48), who: "u-tiago", action: "Enviou publicação ao cliente", target: "Padaria Orvalho · Um dia na padaria", ip: "94.63.201.x" },
+  { id: "l3", at: daysAgo(0, 9, 12), who: "cliente:Filipa Costa", action: "Aprovou publicação", target: "Padaria Orvalho · Pastel de nata", ip: "188.81.4.x" },
+  { id: "l4", at: daysAgo(1, 18), who: "u-pedro", action: "Ligou conta", target: "Kinetik Fitness · TikTok", ip: "85.244.12.x" },
+  { id: "l5", at: daysAgo(1, 16, 40), who: "cliente:Filipa Costa", action: "Pediu alterações", target: "Padaria Orvalho · Sábado de centeio", ip: "188.81.4.x" },
+  { id: "l6", at: daysAgo(2, 16), who: "u-rui", action: "Enviou proposta", target: "Vinhos Serra Alta", ip: "85.244.12.x" },
+  { id: "l7", at: daysAgo(3, 11), who: "u-sara", action: "Mudou papel", target: "Filipa Costa → Cliente", ip: "85.244.12.x" },
+  { id: "l8", at: daysAgo(4, 9, 30), who: "u-ana", action: "Exportou relatório", target: "Casa Lume · agosto", ip: "85.244.12.x" },
+];
+
+/** Image data for uploaded files, looked up by previews (filled by the store). */
+export const ASSET_SRC: Record<string, string> = {};
+
+export const proposalTotals = (p: Pick<Proposal, "items">) => ({
+  monthly: p.items.filter((i) => i.recurring).reduce((a, i) => a + i.price, 0),
+  once: p.items.filter((i) => !i.recurring).reduce((a, i) => a + i.price, 0),
+});

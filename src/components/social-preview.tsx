@@ -23,7 +23,8 @@ const handleFor = (clientId: string, n: NetworkId) => {
   return n === "instagram" || n === "tiktok" ? name.toLowerCase().replace(/[^a-z0-9]+/g, "") : name;
 };
 
-const when = (d: Date) => (d > NOW ? `Agendado · ${dayMonth(d)} às ${time(d)}` : dayMonth(d));
+const when = (p: Pick<Post, "date" | "status">) =>
+  p.date <= NOW ? dayMonth(p.date) : `${p.status === "agendado" ? "Agendado" : "Previsto"} · ${dayMonth(p.date)} às ${time(p.date)}`;
 
 function Caption({ text, limit, handle }: { text: string; limit: number; handle?: string }) {
   const [open, setOpen] = useState(false);
@@ -84,7 +85,7 @@ function InstagramPost({ post }: { post: Post }) {
       </div>
       <div className="sp-body">
         <Caption text={fullCaption(post)} limit={120} handle={h} />
-        <div className="sp-time">{when(post.date)}</div>
+        <div className="sp-time">{when(post)}</div>
       </div>
     </article>
   );
@@ -98,7 +99,7 @@ function FacebookPost({ post }: { post: Post }) {
         <Avatar clientId={post.clientId} size={38} />
         <div className="grow">
           <b>{name}</b>
-          <div className="sp-sub row" style={{ gap: 4 }}>{when(post.date)} · <Globe2 size={11} /></div>
+          <div className="sp-sub row" style={{ gap: 4 }}>{when(post)} · <Globe2 size={11} /></div>
         </div>
         <MoreHorizontal size={18} />
       </header>
@@ -142,7 +143,7 @@ function TikTokPost({ post }: { post: Post }) {
           <div className="row" style={{ gap: 6, fontSize: 12 }}><Music2 size={12} /> som original · {h}</div>
         </div>
       </div>
-      <div className="sp-time" style={{ padding: "8px 2px 0" }}>{when(post.date)}</div>
+      <div className="sp-time" style={{ padding: "8px 2px 0" }}>{when(post)}</div>
     </article>
   );
 }
@@ -157,7 +158,7 @@ function LinkedInPost({ post }: { post: Post }) {
         <div className="grow">
           <b>{name}</b>
           <div className="sp-sub">{compact(followers)} seguidores</div>
-          <div className="sp-sub row" style={{ gap: 4 }}>{when(post.date)} · <Globe2 size={11} /></div>
+          <div className="sp-sub row" style={{ gap: 4 }}>{when(post)} · <Globe2 size={11} /></div>
         </div>
         <MoreHorizontal size={18} />
       </header>

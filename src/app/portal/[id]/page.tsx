@@ -22,7 +22,10 @@ export default function PortalPage() {
   const router = useRouter();
   const c = getClient(id);
   const { theme, setTheme, viewAs, setViewAs } = useSession();
-  const { posts, clientApprove, clientReject } = useStore();
+  const { posts, clientApprove, clientReject, nps, submitNps } = useStore();
+  const [score, setScore] = useState<number | null>(null);
+  const [npsComment, setNpsComment] = useState("");
+  const [npsSent, setNpsSent] = useState(false);
   const [changing, setChanging] = useState<string | null>(null);
   const [text, setText] = useState("");
   const [done, setDone] = useState<Record<string, "ok" | "changes">>({});
@@ -190,6 +193,46 @@ export default function PortalPage() {
             </div>
           </section>
         )}
+
+        {(() => {
+          const last = nps.filter((n) => n.clientId === c.id).sort((a, b) => b.date.getTime() - a.date.getTime())[0];
+          const due = !last || NOW.getTime() - last.date.getTime() > 20 * 864e5;
+          if (!due && !npsSent) return null;
+          return (
+            <section className="card card__body nps" style={{ marginTop: 24 }}>
+              {npsSent ? (
+                <div className="row" style={{ gap: 10 }}>
+                  <Check size={18} style={{ color: "var(--good)" }} />
+                  <span>Obrigado pela resposta! Lemos todas e falamos convosco se for preciso.</span>
+                </div>
+              ) : (
+                <>
+                  <div style={{ fontWeight: 600, fontSize: 16 }}>De 0 a 10, qual a probabilidade de recomendarem a agência a um amigo ou parceiro?</div>
+                  <div className="nps__scale" role="radiogroup" aria-label="Nota de 0 a 10">
+                    {Array.from({ length: 11 }, (_, i) => (
+                      <button key={i} role="radio" aria-checked={score === i} className={`nps__btn ${score === i ? "is-on" : ""}`} onClick={() => setScore(i)}>{i}</button>
+                    ))}
+                  </div>
+                  <div className="spread faint" style={{ fontSize: 12 }}><span>Nada provável</span><span>Muito provável</span></div>
+                  {score !== null && (
+                    <form
+                      className="stack"
+                      style={{ gap: 8, marginTop: 10 }}
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        submitNps({ clientId: c.id, by: contact?.name ?? "Cliente", score, comment: npsComment.trim() });
+                        setNpsSent(true);
+                      }}
+                    >
+                      <textarea className="input" style={{ minHeight: 70 }} value={npsComment} onChange={(e) => setNpsComment(e.target.value)} placeholder={score >= 9 ? "O que estamos a fazer bem? (opcional)" : "O que podíamos fazer melhor? (opcional)"} />
+                      <button className="btn btn--primary" type="submit" style={{ justifySelf: "start" }}>Enviar</button>
+                    </form>
+                  )}
+                </>
+              )}
+            </section>
+          );
+        })()}
 
         <div className="grid grid--main" style={{ gap: 24 }}>
           <div>

@@ -2,11 +2,14 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, CheckCheck, ListPlus, MessageCircle, Send, AtSign, MessageSquare, UserRound } from "lucide-react";
-import { CLIENTS, INBOX, NOW, USERS, client as getClient, network, type InboxItem } from "@/lib/data";
+import { ArrowLeft, CheckCheck, Clock, ListPlus, MessageCircle, Send, AtSign, MessageSquare, UserRound } from "lucide-react";
+import { CLIENTS, INBOX, NOW, RESPONSE_STATS, SLA_MINUTES, USERS, client as getClient, network, type InboxItem } from "@/lib/data";
 import { ago, time } from "@/lib/format";
 import { Avatar, ClientTile, NetIcon, PageHead, PersonAvatar } from "@/components/ui";
 import { useSession } from "@/components/session";
+import { useStore } from "@/components/store";
+import { hm } from "@/components/time";
+import Link from "next/link";
 
 const SAVED_REPLIES = [
   "Olá! Obrigado pela mensagem. Vamos verificar e respondemos já por mensagem privada.",
@@ -29,6 +32,9 @@ export default function InboxPage() {
 function Inbox() {
   const params = useSearchParams();
   const { user: me, viewAs } = useSession();
+  const { inboxAnswered, answerInbox } = useStore();
+  const isAnswered = (m: InboxItem) => m.answered || !!inboxAnswered[m.id];
+  const waitMin = (m: InboxItem) => (NOW.getTime() - m.date.getTime()) / 60000;
   const supervisor = viewAs === "ceo";
   const [scope, setScope] = useState<Scope>("minhas");
   const [items, setItems] = useState<InboxItem[]>(INBOX);
@@ -80,6 +86,7 @@ function Inbox() {
       ),
     );
     setDraft("");
+    answerInbox(current.id);
   };
 
   const unreadCount = items.filter((m) => inScope(m) && m.unread && !resolved.includes(m.id)).length;
@@ -104,6 +111,22 @@ function Inbox() {
           )
         }
       />
+
+      <div className="sla-strip">
+        {(() => {
+          const mine = CLIENTS.filter((c) => (scope === "equipa" && supervisor) || c.inboxOwner === me.id).map((c) => RESPONSE_STATS[c.id]).filter(Boolean);
+          const replies = mine.reduce((a, v) => a + v.replies, 0);
+          const late = items.filter((m) => inScope(m) && !isAnswered(m) && !resolved.includes(m.id) && waitMin(m) > SLA_MINUTES).length;
+          return (
+            <>
+              <span><Clock size={14} /> Tempo médio de resposta <b>{replies ? hm(mine.reduce((a, v) => a + v.avgMinutes * v.replies, 0) / replies) : "—"}</b></span>
+              <span><b>{replies ? Math.round((mine.reduce((a, v) => a + v.within4h * v.replies, 0) / replies) * 100) : 0}%</b> em menos de 4 h</span>
+              <span className={late ? "due--late" : ""}><b>{late}</b> sem resposta há +4 h</span>
+              <Link className="link" href="/operacao" style={{ marginLeft: "auto" }}>Detalhe</Link>
+            </>
+          );
+        })()}
+      </div>
 
       <div className="inbox">
         <div className={current ? "inbox__list hide-when-detail" : "inbox__list"}>
@@ -150,6 +173,11 @@ function Inbox() {
                     <div className="row faint" style={{ fontSize: 12, marginTop: 6 }}>
                       <Icon size={13} /> {m.kind} · <ClientTile clientId={m.clientId} size={14} /> {getClient(m.clientId)!.name}
                       {m.sentiment === "negativo" && <span className="badge badge--bad" style={{ height: 18, marginLeft: "auto" }}>negativo</span>}
+                      {!isAnswered(m) && waitMin(m) > SLA_MINUTES && (
+                        <span className="badge badge--warn" style={{ height: 18, marginLeft: m.sentiment === "negativo" ? 0 : "auto" }} title="Sem resposta há mais de 4 horas">
+                          <Clock size={11} /> {hm(waitMin(m))}
+                        </span>
+                      )}
                       {scope === "equipa" && supervisor && (
                         <span style={{ marginLeft: m.sentiment === "negativo" ? 0 : "auto" }}><Avatar userId={ownerOf(m)} size={18} /></span>
                       )}

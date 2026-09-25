@@ -12,7 +12,10 @@ import {
   ChevronRight,
   Contact,
   Eye,
+  FileSignature,
   FileText,
+  Gauge,
+  ShieldCheck,
   Home,
   Inbox,
   KanbanSquare,
@@ -31,6 +34,7 @@ import { CLIENTS, INBOX, NOW, ROLES, ROLE_USER, user as getUser, type Permission
 import { avatarColor, ClientTile } from "./ui";
 import { useSession } from "./session";
 import { useStore } from "./store";
+import { TimerPill } from "./time";
 
 type NavItem = { href: string; label: string; icon: LucideIcon; perm?: Permission; count?: number; alert?: boolean };
 
@@ -73,14 +77,17 @@ function useGroups(): { label: string; items: NavItem[] }[] {
       label: "Negócio",
       items: [
         { href: "/crm/pipeline", label: "Pipeline", icon: KanbanSquare, perm: "crm" },
+        { href: "/crm/propostas", label: "Propostas", icon: FileSignature, perm: "crm" },
         { href: "/crm", label: "Contactos e empresas", icon: Contact, perm: "crm" },
         { href: "/empresa", label: "Empresa", icon: Building2, perm: "empresa" },
+        { href: "/operacao", label: "Operação", icon: Gauge, perm: "gerir_clientes" },
       ],
     },
     {
       label: "Agência",
       items: [
         { href: "/equipa", label: "Equipa e papéis", icon: Users },
+        { href: "/seguranca", label: "Segurança e RGPD", icon: ShieldCheck, perm: "seguranca" },
         { href: "/portal/kinetik", label: "Ver portal do cliente", icon: Eye },
       ],
     },
@@ -283,6 +290,9 @@ const CRUMB: Record<string, string> = {
   crm: "CRM",
   pipeline: "Pipeline",
   equipa: "Equipa e papéis",
+  propostas: "Propostas",
+  operacao: "Operação",
+  seguranca: "Segurança e RGPD",
   empresa: "Empresa",
 };
 
@@ -380,6 +390,7 @@ export function Shell({ children }: { children: ReactNode }) {
               <Crumbs />
             </nav>
           </div>
+          <TimerPill />
           <button className="topbar__search" onClick={() => setPalette(true)}>
             <Search size={15} />
             Procurar

@@ -8,6 +8,7 @@ import { money, pct } from "@/lib/format";
 import { LineChart } from "@/components/charts";
 import { ClientTile, Kpi, PageHead, SectionTitle } from "@/components/ui";
 import { useSession } from "@/components/session";
+import { useStore } from "@/components/store";
 
 const TABS = ["Visão geral", "Break-even", "Cenários", "Rentabilidade por cliente"] as const;
 type Tab = (typeof TABS)[number];
@@ -372,13 +373,21 @@ function Scenarios() {
 /* ------------------------------------------------------------ profitability */
 
 function Profitability() {
+  const { time } = useStore();
+  const from = new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() - 29);
+  // Real hours from the time log (last 30 days) replace the estimates.
+  const rows = econ.map((e) => {
+    const hours = time.filter((t) => t.clientId === e.clientId && t.date >= from).reduce((a, t) => a + t.minutes, 0) / 60 || e.hours;
+    const cost = hours * FINANCE.hourCost;
+    return { ...e, hours: Math.round(hours), cost, margin: e.fee - cost, marginPct: (e.fee - cost) / e.fee, perHour: e.fee / hours };
+  });
   return (
     <>
       <div className="notice notice--info" style={{ marginBottom: 16 }}>
         <ShieldCheck size={16} />
         <span>
-          Margem = avença − horas registadas × {money(FINANCE.hourCost)}/h (custo interno por hora, com salários e estrutura). As horas vêm das{" "}
-          <Link href="/tarefas" className="link">tarefas</Link>; na versão final, de um registo de tempo.
+          Margem = avença − horas registadas × {money(FINANCE.hourCost)}/h (custo interno por hora, com salários e estrutura). As horas são as registadas nos últimos 30 dias em{" "}
+          <Link href="/operacao" className="link">Operação → Horas</Link> e nas tarefas.
         </span>
       </div>
       <div className="table-wrap">
@@ -387,7 +396,7 @@ function Profitability() {
             <tr>
               <th>Cliente</th>
               <th className="r">Avença</th>
-              <th className="r">Horas/mês</th>
+              <th className="r">Horas (30 d)</th>
               <th className="r">Custo</th>
               <th className="r">Margem</th>
               <th className="r">€ por hora</th>
@@ -396,7 +405,7 @@ function Profitability() {
             </tr>
           </thead>
           <tbody>
-            {[...econ].sort((a, b) => b.marginPct - a.marginPct).map((e) => {
+            {[...rows].sort((a, b) => b.marginPct - a.marginPct).map((e) => {
               const tone = e.marginPct < 0.2 ? "bad" : e.marginPct < 0.35 ? "warn" : "good";
               const rec =
                 e.marginPct < 0.2

@@ -2,16 +2,16 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Bell, Check, ExternalLink, Plus, RotateCcw, Send } from "lucide-react";
+import { Bell, Check, ExternalLink, Mail, MessageSquare, Plus, RotateCcw, Send } from "lucide-react";
 import { CLIENTS, NOW, POST_FLOW, POST_STATUS, POST_STATUS_HINT, client as getClient, type Post, type PostStatus } from "@/lib/data";
-import { dayMonth, time } from "@/lib/format";
-import { Avatar, ClientTile, Kpi, NetIcon, PageHead, PostThumb } from "@/components/ui";
+import { ago, dayMonth, time } from "@/lib/format";
+import { Avatar, ClientTile, Kpi, NetIcon, PageHead, PostThumb, SectionTitle } from "@/components/ui";
 import { FlowSteps, PostDrawer } from "@/components/post-drawer";
 import { useStore } from "@/components/store";
 import { useSession } from "@/components/session";
 
 export default function ContentPage() {
-  const { posts, sendToClient, confirmPost } = useStore();
+  const { posts, sendToClient, confirmPost, notifications } = useStore();
   const { can, user: me } = useSession();
   const [clientId, setClientId] = useState<string | null>(null);
   const [open, setOpen] = useState<Post | "new" | null>(null);
@@ -111,6 +111,17 @@ export default function ContentPage() {
                       )}
                     </div>
 
+                    {p.status === "uat" && notifications.some((n) => n.postIds.includes(p.id)) && (
+                      <div className="row faint" style={{ fontSize: 12, marginTop: 8, gap: 6 }}>
+                        {notifications.filter((n) => n.postIds.includes(p.id)).map((n) => (
+                          <span key={n.id} className="row" style={{ gap: 3 }}>
+                            {n.channel === "whatsapp" ? <MessageSquare size={12} /> : <Mail size={12} />}
+                            {n.channel === "whatsapp" ? "WhatsApp" : "Email"} enviado
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
                     <div className="row" style={{ marginTop: 10, flexWrap: "wrap" }} onClick={(e) => e.stopPropagation()}>
                       {p.status === "todo" && can("publicar") && (
                         <button className="btn btn--sm" onClick={() => sendToClient(p.id, me.id)}>
@@ -144,6 +155,29 @@ export default function ContentPage() {
             </section>
           );
         })}
+      </div>
+
+      <SectionTitle title="Avisos enviados aos clientes" />
+      <div className="list">
+        {notifications.filter((n) => n.postIds.length).slice(0, 8).map((n) => (
+          <details key={n.id} className="notif">
+            <summary className="list-item" style={{ alignItems: "center" }}>
+              <span className={`notif__ch notif__ch--${n.channel}`}>{n.channel === "whatsapp" ? <MessageSquare size={14} /> : <Mail size={14} />}</span>
+              <div className="grow" style={{ minWidth: 0 }}>
+                <div className="truncate" style={{ fontWeight: 500 }}>{n.channel === "email" ? n.subject : n.body}</div>
+                <div className="faint" style={{ fontSize: 12 }}>{getClient(n.clientId)?.name} · {n.to} · {ago(n.sentAt, NOW)}</div>
+              </div>
+              <span className={`badge ${n.status === "respondida" ? "badge--good" : n.status === "aberta" ? "badge--info" : ""}`}>{n.status}</span>
+            </summary>
+            <pre className="notif__body">{n.body}</pre>
+            <Link className="link" style={{ margin: "-4px 0 12px 50px", display: "inline-block", fontSize: 13 }} href={`/aprovar/${n.postIds[0]}`} target="_blank">
+              Abrir o link como o cliente →
+            </Link>
+          </details>
+        ))}
+        {!notifications.some((n) => n.postIds.length) && (
+          <div className="empty">Quando envias um post ao cliente, ele recebe um email e/ou WhatsApp com o link para aprovar num clique. Os avisos aparecem aqui.</div>
+        )}
       </div>
 
       {open && <PostDrawer post={open === "new" ? null : open} defaultClient={clientId} onClose={() => setOpen(null)} />}

@@ -16,8 +16,9 @@ import {
 import { useStore } from "@/components/store";
 import { useSession } from "@/components/session";
 import { ClientForm } from "@/components/client-form";
+import { AssetLibrary } from "@/components/assets";
 
-const TABS = ["Visão geral", "Perfil", "Redes sociais", "Site", "Negócio"] as const;
+const TABS = ["Visão geral", "Perfil", "Ficheiros", "Redes sociais", "Site", "Negócio"] as const;
 type Tab = (typeof TABS)[number];
 const PERIODS = [
   { days: 7, label: "7 dias" },
@@ -114,11 +115,12 @@ export default function ClientPage() {
         ))}
       </div>
 
+      {tab === "Ficheiros" && <AssetLibrary clientId={c.id} />}
       {tab === "Perfil" && <ProfileTab clientId={c.id} onEdit={can("gerir_clientes") ? () => setEditing(true) : undefined} />}
 
       {editing && <ClientForm clientId={c.id} onClose={() => setEditing(false)} />}
 
-      {tab !== "Negócio" && tab !== "Perfil" && (
+      {tab !== "Negócio" && tab !== "Perfil" && tab !== "Ficheiros" && (
         <div className="filters">
           <div className="segmented" role="group" aria-label="Período">
             {PERIODS.map((p) => (
@@ -417,6 +419,30 @@ function UpcomingList({ posts }: { posts: Post[] }) {
   );
 }
 
+function Onboarding({ clientId }: { clientId: string }) {
+  const { tasks, saveTask } = useStore();
+  const steps = tasks.filter((t) => t.clientId === clientId && t.tags.includes("arranque")).sort((a, b) => (a.due?.getTime() ?? 0) - (b.due?.getTime() ?? 0));
+  if (!steps.length) return null;
+  const done = steps.filter((t) => t.done).length;
+  return (
+    <section className="card card__body">
+      <div className="spread" style={{ marginBottom: 8 }}>
+        <div className="eyebrow">Arranque do cliente</div>
+        <span className="faint" style={{ fontSize: 12 }}>{done} de {steps.length}</span>
+      </div>
+      <div className="progress" style={{ marginBottom: 10 }}><i style={{ width: `${(done / steps.length) * 100}%` }} /></div>
+      {steps.map((t) => (
+        <Link key={t.id} href={`/tarefas?t=${t.id}`} className="subtask">
+          <CheckCircle checked={t.done} label={`Concluir: ${t.title}`} onToggle={() => saveTask({ ...t, done: !t.done })} />
+          <span className={`grow ${t.done ? "done-text" : ""}`} style={{ fontSize: 13 }}>{t.title}</span>
+          <Avatar userId={t.assignee} size={20} />
+          <span style={{ fontSize: 12, minWidth: 48, textAlign: "right" }}><Due date={t.due} done={t.done} /></span>
+        </Link>
+      ))}
+    </section>
+  );
+}
+
 function ProfileTab({ clientId, onEdit }: { clientId: string; onEdit?: () => void }) {
   const c = getClient(clientId)!;
   const p = PROFILES[clientId];
@@ -427,6 +453,7 @@ function ProfileTab({ clientId, onEdit }: { clientId: string; onEdit?: () => voi
   return (
     <div className="profile-grid">
       <div className="stack" style={{ gap: 16 }}>
+        <Onboarding clientId={clientId} />
         <section className="card card__body">
           <div className="spread" style={{ marginBottom: 8 }}>
             <div className="eyebrow">Sobre o cliente</div>

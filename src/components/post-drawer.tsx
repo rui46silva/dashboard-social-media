@@ -10,6 +10,7 @@ import {
 import { ago } from "@/lib/format";
 import { Avatar, PersonAvatar, PostStatusLozenge } from "./ui";
 import { PreviewSwitcher } from "./social-preview";
+import { AssetPicker } from "./assets";
 import { useSession } from "./session";
 import { useStore } from "./store";
 
@@ -59,6 +60,7 @@ export function PostDrawer({
   const [kind, setKind] = useState<Post["kind"]>(live?.kind ?? "Imagem");
   const [when, setWhen] = useState(toLocalInput(live?.date ?? defaultDate ?? NOW));
   const [note, setNote] = useState("");
+  const [assetIds, setAssetIds] = useState<string[]>(live?.assetIds ?? []);
 
   const editable = !live || live.status === "todo";
   const minLimit = Math.min(...networks.map((n) => LIMITS[n]));
@@ -74,6 +76,7 @@ export function PostDrawer({
     author: live?.author ?? me.id,
     rounds: live?.rounds ?? 0,
     comments: live?.comments ?? [],
+    assetIds,
   });
 
   const saveDraft = () => {
@@ -178,6 +181,15 @@ export function PostDrawer({
             </span>
             <textarea className="input" value={caption} disabled={!editable} placeholder="Escreve a legenda…" onChange={(e) => setCaption(e.target.value)} />
           </label>
+
+          <div className="field">
+            <span>Imagens e vídeo</span>
+            {editable ? (
+              <AssetPicker clientId={clientId} value={assetIds} onChange={setAssetIds} />
+            ) : (
+              <span className="faint" style={{ fontSize: 13 }}>{assetIds.length ? `${assetIds.length} ficheiro(s) da biblioteca` : "Sem ficheiros associados"}</span>
+            )}
+          </div>
 
           <div>
             <div className="eyebrow" style={{ marginBottom: 8 }}>Como vai aparecer</div>

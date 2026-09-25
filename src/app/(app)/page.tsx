@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { AlertTriangle, ArrowRight, RotateCcw } from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock, Frown, RotateCcw } from "lucide-react";
 import {
-  CLIENTS, CLIENT_ECONOMICS, DEALS, FINANCE, INBOX, NOW, SOCIAL, client, company,
+  CLIENTS, CLIENT_ECONOMICS, DEALS, FINANCE, INBOX, NOW, SLA_MINUTES, SOCIAL, client, company,
 } from "@/lib/data";
 import { compact, longDate, money, num, sameDay, time } from "@/lib/format";
 import { Sparkline } from "@/components/charts";
@@ -35,6 +35,11 @@ export default function Home() {
   const myInbox = INBOX.filter((m) => client(m.clientId)?.inboxOwner === me.id);
   const unread = myInbox.filter((m) => m.unread);
   const negative = myInbox.filter((m) => m.sentiment === "negativo" && m.unread);
+  const { inboxAnswered, nps } = useStore();
+  const lateReplies = myInbox.filter((m) => !m.answered && !inboxAnswered[m.id] && NOW.getTime() - m.date.getTime() > SLA_MINUTES * 60000 && !negative.includes(m));
+  const detractors = can("gerir_clientes")
+    ? CLIENTS.map((c) => nps.filter((n) => n.clientId === c.id).sort((a, b) => b.date.getTime() - a.date.getTime())[0]).filter((n) => n && n.score <= 6)
+    : [];
   const withClient = posts.filter((p) => p.status === "uat");
   const toConfirm = posts.filter((p) => p.status === "confirmar");
   const rejected = posts.filter((p) => p.status === "todo" && p.rounds > 0);
@@ -151,6 +156,24 @@ export default function Home() {
               <div className="grow">
                 <div style={{ fontWeight: 600 }}>Comentário negativo · {client(m.clientId)!.name}</div>
                 <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>«{m.text}»</div>
+              </div>
+            </Link>
+          ))}
+          {lateReplies.map((m) => (
+            <Link key={m.id} href={`/inbox?m=${m.id}`} className="row" style={{ padding: "10px 18px", borderTop: "1px solid var(--line)", alignItems: "flex-start", gap: 10 }}>
+              <Clock size={16} style={{ color: "var(--warn)", marginTop: 2, flex: "none" }} />
+              <div className="grow">
+                <div style={{ fontWeight: 600 }}>Sem resposta há mais de 4 horas · {client(m.clientId)!.name}</div>
+                <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>{m.author}: «{m.text}»</div>
+              </div>
+            </Link>
+          ))}
+          {detractors.map((n) => (
+            <Link key={n!.id} href="/operacao" className="row" style={{ padding: "10px 18px", borderTop: "1px solid var(--line)", alignItems: "flex-start", gap: 10 }}>
+              <Frown size={16} style={{ color: "var(--bad)", marginTop: 2, flex: "none" }} />
+              <div className="grow">
+                <div style={{ fontWeight: 600 }}>{client(n!.clientId)!.name} deu {n!.score}/10 na satisfação</div>
+                <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>{n!.comment ? `«${n!.comment}»` : "Ligar esta semana."}</div>
               </div>
             </Link>
           ))}

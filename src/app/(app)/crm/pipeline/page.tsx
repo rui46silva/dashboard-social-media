@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Mail, Phone, Plus, X } from "lucide-react";
+import { FileText, Mail, Phone, Plus, X } from "lucide-react";
 import { CONTACTS, DEALS, NOW, STAGES, company, user, type Deal, type Stage } from "@/lib/data";
 import { ago, money } from "@/lib/format";
 import { Avatar, Kpi, PageHead } from "@/components/ui";
+import { useStore } from "@/components/store";
 
 const PROB: Record<Stage, number> = { Lead: 0.1, Qualificado: 0.25, Proposta: 0.5, Negociação: 0.75, Ganho: 1, Perdido: 0 };
 
@@ -106,6 +107,7 @@ export default function PipelinePage() {
 }
 
 function DealDrawer({ deal, onClose, onStage }: { deal: Deal; onClose: () => void; onStage: (s: Stage) => void }) {
+  const { proposals } = useStore();
   const co = company(deal.companyId);
   const contact = CONTACTS.find((c) => c.id === deal.contactId)!;
   return (
@@ -161,6 +163,9 @@ function DealDrawer({ deal, onClose, onStage }: { deal: Deal; onClose: () => voi
               </div>
             ))}
           </div>
+          <Link className="btn btn--primary" href={`/crm/propostas?deal=${deal.id}`}>
+            <FileText size={15} /> {proposals.some((p) => p.dealId === deal.id) ? "Ver proposta" : "Criar proposta"}
+          </Link>
           {co.clientId && (
             <Link className="btn" href={`/clientes/${co.clientId}`}>Ver métricas do cliente</Link>
           )}
