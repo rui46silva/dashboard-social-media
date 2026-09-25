@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import "@fontsource-variable/hanken-grotesk";
+import "@fontsource-variable/plus-jakarta-sans";
 import "./globals.css";
 import { SessionProvider, themeScript } from "@/components/session";
 import { StoreProvider } from "@/components/store";

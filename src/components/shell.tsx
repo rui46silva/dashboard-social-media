@@ -21,6 +21,8 @@ import {
   KanbanSquare,
   ListChecks,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
   Monitor,
   Moon,
   Plus,
@@ -130,9 +132,11 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
                 className="nav-link"
                 aria-current={isActive(pathname, i.href) ? "page" : undefined}
                 onClick={onNavigate}
+                title={i.label}
+                data-count={i.count || undefined}
               >
-                <i.icon size={17} strokeWidth={1.8} />
-                {i.label}
+                <i.icon size={18} strokeWidth={1.8} />
+                <span className="nav-label">{i.label}</span>
                 {!!i.count && <span className={`count num ${i.alert ? "count--alert" : ""}`}>{i.count}</span>}
               </Link>
             ))}
@@ -146,11 +150,12 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
             key={c.id}
             href={`/clientes/${c.id}`}
             className="nav-link"
+            title={c.name}
             aria-current={pathname === `/clientes/${c.id}` ? "page" : undefined}
             onClick={onNavigate}
           >
             <ClientTile clientId={c.id} size={18} />
-            <span className="truncate">{c.name}</span>
+            <span className="truncate nav-label">{c.name}</span>
           </Link>
         ))}
       </div>
@@ -323,6 +328,19 @@ export function Shell({ children }: { children: ReactNode }) {
   const { viewAs, can, user } = useSession();
   const unread = unreadFor(user.id);
   const [sheet, setSheet] = useState(false);
+  const [rail, setRail] = useState(false);
+  useEffect(() => {
+    try {
+      setRail(localStorage.getItem("mesa:rail") === "1");
+    } catch {}
+  }, []);
+  const toggleRail = () =>
+    setRail((r) => {
+      try {
+        localStorage.setItem("mesa:rail", r ? "0" : "1");
+      } catch {}
+      return !r;
+    });
   const [palette, setPalette] = useState(false);
 
   // Clients never see the agency workspace — only their own portal.
@@ -360,15 +378,20 @@ export function Shell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="shell">
+    <div className={`shell ${rail ? "is-rail" : ""}`}>
       <aside className="sidebar">
-        <Link href="/" className="logo">
-          <LogoMark />
-          Mesa
-        </Link>
-        <Link href="/calendario?novo=1" className="side-cta">
+        <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
+          <Link href="/" className="logo">
+            <LogoMark />
+            <span className="logo__text">Mesa</span>
+          </Link>
+          <button className="icon-btn rail-toggle" onClick={toggleRail} aria-label={rail ? "Expandir menu" : "Encolher menu"} title={rail ? "Expandir menu" : "Encolher menu"}>
+            {rail ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+          </button>
+        </div>
+        <Link href="/calendario?novo=1" className="side-cta" title="Criar publicação">
           <span><Plus size={14} strokeWidth={2.5} /></span>
-          Criar
+          <span className="side-cta__label">Criar</span>
         </Link>
         <nav aria-label="Principal">
           <NavLinks />

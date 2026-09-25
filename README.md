@@ -52,7 +52,7 @@ Quando um post é enviado, o cliente recebe um email e/ou WhatsApp (conforme o p
 ## Decisões de design
 
 - **Mobile-first.** Os estilos base são para o telemóvel e as `min-width` media queries acrescentam o layout de ecrã grande. No telemóvel há uma barra de navegação em baixo, o calendário passa a lista, as tabelas passam a cartões e a inbox alterna entre a lista e a conversa.
-- **Ferramenta de trabalho, ao estilo do Asana.** Barra lateral escura, área de trabalho branca, uma só família tipográfica (*Hanken Grotesk*), azul para ações e coral para a marca e alertas. Os destaques no texto usam um fundo suave com texto escuro, para manter a legibilidade.
+- **Vidro fosco sobre gradiente.** Fundo lilás/azul suave, cartões translúcidos com desfoque, cantos muito arredondados, botões pretos em forma de pílula e um acento índigo em gradiente (primeiro indicador de cada página). Tipografia *Plus Jakarta Sans*. Barra lateral clara que encolhe para só ícones.
 - **Claro e escuro.** O tema escuro tem valores próprios (não é uma inversão automática). Podes escolher Claro, Escuro ou Sistema.
 - **Gráficos próprios em SVG**, sem bibliotecas de gráficos. A paleta categórica das redes foi validada para daltonismo nos dois modos, e cada gráfico tem legenda, rótulos diretos e tooltip.
 - **Sem componentes de template.** CSS escrito à mão com tokens em `src/app/globals.css`.
