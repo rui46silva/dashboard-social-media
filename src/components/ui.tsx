@@ -1,5 +1,6 @@
 import { ArrowDownRight, ArrowUpRight, Check, FileText, Film, Images, Image as ImageIcon, Minus, Smartphone } from "lucide-react";
 import type { ReactNode } from "react";
+import { CountUp } from "./count-up";
 import { ASSET_SRC, NOW, POST_STATUS, client as getClient, network, user as getUser, type NetworkId, type Post, type PostStatus } from "@/lib/data";
 import { dayMonth, initials, sameDay, signedPct } from "@/lib/format";
 
@@ -54,7 +55,7 @@ export function Kpi({ label, value, foot }: { label: ReactNode; value: ReactNode
   return (
     <div className="kpi">
       <div className="kpi__label">{label}</div>
-      <div className="kpi__value">{value}</div>
+      <div className="kpi__value">{typeof value === "string" || typeof value === "number" ? <CountUp value={String(value)} /> : value}</div>
       {foot && <div className="kpi__foot">{foot}</div>}
     </div>
   );

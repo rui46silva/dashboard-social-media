@@ -3,6 +3,7 @@ import "@fontsource-variable/plus-jakarta-sans";
 import "./globals.css";
 import { SessionProvider, themeScript } from "@/components/session";
 import { StoreProvider } from "@/components/store";
+import { PillSync } from "@/components/pill-sync";
 
 export const metadata: Metadata = {
   title: { default: "Mesa", template: "%s · Mesa" },
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <SessionProvider>
           <StoreProvider>{children}</StoreProvider>
+          <PillSync />
         </SessionProvider>
       </body>
     </html>

@@ -2,261 +2,276 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { AlertTriangle, ArrowRight, Clock, Frown, RotateCcw } from "lucide-react";
+import { ChevronRight, Plus, RefreshCw, Search, Send } from "lucide-react";
 import {
-  CLIENTS, CLIENT_ECONOMICS, DEALS, FINANCE, INBOX, NOW, SLA_MINUTES, SOCIAL, client, company,
+  CLIENTS, CLIENT_ECONOMICS, FINANCE, INBOX, NETWORKS, NOW, SLA_MINUTES, SOCIAL, TASK_SECTIONS, client, network,
+  type NetworkId,
 } from "@/lib/data";
-import { compact, longDate, money, num, sameDay, time } from "@/lib/format";
-import { Sparkline } from "@/components/charts";
-import { Avatar, CheckCircle, ClientTile, Due, NetIcon, PostStatusLozenge } from "@/components/ui";
+import { compact, dayMonth, longDate, money, num, sameDay, time } from "@/lib/format";
+import { GlassBars, GradientLine } from "@/components/charts";
+import { CheckCircle, ClientTile, Due, NetIcon } from "@/components/ui";
 import { useStore } from "@/components/store";
 import { useSession } from "@/components/session";
 
 const tomorrow = new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() + 1);
 const startToday = new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate());
-type TaskTab = "proximas" | "atrasadas" | "concluidas";
 
 export default function Home() {
-  const { posts, tasks, saveTask } = useStore();
+  const { posts, tasks, saveTask, inboxAnswered, nps, sendToClient } = useStore();
   const { user: me, can } = useSession();
-  const [taskTab, setTaskTab] = useState<TaskTab>("proximas");
+  const [days, setDays] = useState<7 | 30>(30);
+  const [pick, setPick] = useState(CLIENTS[0].id);
+  const [sent, setSent] = useState<string | null>(null);
+  const [allAlerts, setAllAlerts] = useState(false);
 
-  const mine = tasks.filter((t) => t.assignee === me.id || t.collaborators.includes(me.id) || t.priority === "alta");
-  const taskLists: Record<TaskTab, typeof tasks> = {
-    proximas: mine.filter((t) => !t.done && (!t.due || t.due >= startToday)).sort((a, b) => (a.due?.getTime() ?? 9e15) - (b.due?.getTime() ?? 9e15)),
-    atrasadas: mine.filter((t) => !t.done && t.due && t.due < startToday),
-    concluidas: mine.filter((t) => t.done),
-  };
+  /* ------------------------------------------------------------ figures */
+  const stats = Object.values(SOCIAL).flat();
+  const slice = (xs: number[]) => xs.slice(30 - days);
+  const byNetwork = NETWORKS.map((n) => ({
+    id: n.id as NetworkId,
+    value: stats.filter((s) => s.network === n.id).reduce((a, s) => a + slice(s.reachSeries).reduce((x, y) => x + y, 0), 0),
+  })).sort((a, b) => b.value - a.value);
+  const total = byNetwork.reduce((a, n) => a + n.value, 0);
+  const bubbles = [byNetwork[1], byNetwork[0], byNetwork[2]].filter(Boolean);
+
+  const daily = Array.from({ length: 30 }, (_, i) => stats.reduce((a, s) => a + s.reachSeries[i], 0));
+  const weeks = Array.from({ length: 5 }, (_, w) => {
+    const from = new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() - 29 + w * 6);
+    return { label: dayMonth(from), value: daily.slice(w * 6, w * 6 + 6).reduce((a, b) => a + b, 0) };
+  });
+
+  const mrr = FINANCE.recurring;
+  const mrrGrowth = Math.round(((mrr[11] - mrr[0]) / mrr[0]) * 100);
+
+  const mine = tasks
+    .filter((t) => !t.done && (t.assignee === me.id || t.collaborators.includes(me.id) || t.priority === "alta"))
+    .sort((a, b) => (a.due?.getTime() ?? 9e15) - (b.due?.getTime() ?? 9e15))
+    .slice(0, 6);
 
   const agenda = posts
     .filter((p) => sameDay(p.date, NOW) || sameDay(p.date, tomorrow))
     .sort((a, b) => a.date.getTime() - b.date.getTime());
-  // Only the conversations this person is responsible for.
+
   const myInbox = INBOX.filter((m) => client(m.clientId)?.inboxOwner === me.id);
-  const unread = myInbox.filter((m) => m.unread);
-  const negative = myInbox.filter((m) => m.sentiment === "negativo" && m.unread);
-  const { inboxAnswered, nps } = useStore();
-  const lateReplies = myInbox.filter((m) => !m.answered && !inboxAnswered[m.id] && NOW.getTime() - m.date.getTime() > SLA_MINUTES * 60000 && !negative.includes(m));
-  const detractors = can("gerir_clientes")
-    ? CLIENTS.map((c) => nps.filter((n) => n.clientId === c.id).sort((a, b) => b.date.getTime() - a.date.getTime())[0]).filter((n) => n && n.score <= 6)
-    : [];
-  const withClient = posts.filter((p) => p.status === "uat");
-  const toConfirm = posts.filter((p) => p.status === "confirmar");
-  const rejected = posts.filter((p) => p.status === "todo" && p.rounds > 0);
-  const openDeals = DEALS.filter((d) => !["Ganho", "Perdido"].includes(d.stage));
-  const doneThisWeek = tasks.filter((t) => t.done).length;
-  const mrr = FINANCE.recurring[11];
-  const breakEven = FINANCE.fixed.reduce((a, f) => a + f.value, 0) / (1 - FINANCE.variableRate);
+  const alerts = (() => {
+    const out: { title: string; text: string; href: string }[] = [];
+    myInbox.filter((m) => m.sentiment === "negativo" && m.unread).forEach((m) =>
+      out.push({ title: `Comentário negativo na ${client(m.clientId)!.name}`, text: `«${m.text}»`, href: `/inbox?m=${m.id}` }),
+    );
+    myInbox.filter((m) => !m.answered && !inboxAnswered[m.id] && NOW.getTime() - m.date.getTime() > SLA_MINUTES * 6e4).forEach((m) =>
+      out.push({ title: `${m.author} espera resposta há mais de 4 h`, text: `«${m.text}»`, href: `/inbox?m=${m.id}` }),
+    );
+    if (can("gerir_clientes")) {
+      CLIENTS.forEach((c) => {
+        const last = nps.filter((n) => n.clientId === c.id).sort((a, b) => b.date.getTime() - a.date.getTime())[0];
+        if (last && last.score <= 6) out.push({ title: `${c.name} deu ${last.score}/10 na satisfação`, text: last.comment || "Ligar esta semana.", href: "/operacao" });
+      });
+      CLIENT_ECONOMICS.filter((e) => e.contractEnd.getTime() - NOW.getTime() < 90 * 864e5).forEach((e) =>
+        out.push({
+          title: `Contrato da ${client(e.clientId)!.name} renova em ${Math.round((e.contractEnd.getTime() - NOW.getTime()) / 864e5)} dias`,
+          text: "Marcar reunião de renovação com os resultados do trimestre.",
+          href: can("empresa") ? "/empresa" : `/clientes/${e.clientId}`,
+        }),
+      );
+    }
+    return out;
+  })();
+
+  const toSend = posts.filter((p) => p.clientId === pick && p.status === "todo");
+  const withClient = posts.filter((p) => p.status === "uat").length;
 
   return (
-    <>
-      <section className="home-hero">
-        <div className="eyebrow">{longDate(NOW)[0].toUpperCase() + longDate(NOW).slice(1)}</div>
-        <h1 className="greeting" style={{ marginTop: 6 }}>Bom dia, {me.name.split(" ")[0]}</h1>
-        <div className="hero-stats">
-          <span><b>{doneThisWeek}</b> tarefas concluídas</span>
-          <span><b>{withClient.length}</b> posts com clientes</span>
-          <span><b>{unread.length}</b> mensagens por responder</span>
+    <div className="home">
+      {/* Header like the reference: title + subtitle left, summary pill right */}
+      <header className="home__head">
+        <div>
+          <h1>Bom dia, {me.name.split(" ")[0]}</h1>
+          <p>{longDate(NOW)[0].toUpperCase() + longDate(NOW).slice(1)} · {mine.length} tarefas e {withClient} posts com clientes</p>
         </div>
-      </section>
+        <Link href="/conteudo" className="head-pill">
+          <span className="head-pill__dot" />
+          {posts.filter((p) => p.status === "confirmar").length} aprovados por confirmar
+          <ChevronRight size={15} />
+        </Link>
+      </header>
 
-      <div className="grid grid--2" style={{ gap: 16 }}>
-        {/* My tasks */}
-        <section className="widget">
-          <div className="widget__head">
-            <Avatar userId={me.id} size={32} />
-            <h2 className="grow">As minhas tarefas</h2>
-            <Link href="/tarefas">Ver todas</Link>
+      <div className="home__grid">
+        <div className="home__main">
+          {/* Hero: total reach with network bubbles */}
+          <section className="card hero-card">
+            <div className="spread" style={{ alignItems: "flex-start" }}>
+              <div>
+                <div className="muted" style={{ fontWeight: 500 }}>Alcance total</div>
+                <div className="hero-card__value">
+                  <small>≈</small>
+                  {num(total)}
+                </div>
+              </div>
+              <div className="segmented" role="group" aria-label="Período">
+                <button aria-pressed={days === 7} onClick={() => setDays(7)}>7 dias</button>
+                <button aria-pressed={days === 30} onClick={() => setDays(30)}>30 dias</button>
+              </div>
+            </div>
+            <div className="hero-card__row">
+              <div className="bubbles">
+                {bubbles.map((b, i) => (
+                  <div key={b.id} className={`bubble-stat ${i === 1 ? "is-main" : ""}`} style={{ animationDelay: `${i * 90}ms` }}>
+                    <b>{compact(b.value)}</b>
+                    <span>{network(b.id).name}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="hero-card__actions">
+                <Link href="/relatorios" className="btn btn--lg">Ver relatórios</Link>
+                <Link href="/calendario?novo=1" className="btn btn--primary btn--lg">Nova publicação</Link>
+              </div>
+            </div>
+          </section>
+
+          <div className="home__pair">
+            <section className="card card__body">
+              <div className="spread" style={{ marginBottom: 18 }}>
+                <h2 className="card-title">Alcance por semana</h2>
+                <span className="chip" style={{ height: 28, pointerEvents: "none" }}>30 dias</span>
+              </div>
+              <GlassBars data={weeks} />
+            </section>
+
+            <section className="card card--accent card__body gradient-card">
+              <div className="spread">
+                <h2 className="card-title" style={{ color: "#fff" }}>{can("empresa") ? "Saúde do negócio" : "Ritmo das redes"}</h2>
+                <Link href={can("empresa") ? "/empresa" : "/clientes"} className="icon-btn gradient-card__btn" aria-label="Abrir detalhe">
+                  <RefreshCw size={15} />
+                </Link>
+              </div>
+              <div className="gradient-card__value">
+                {can("empresa") ? `+${mrrGrowth}%` : compact(daily.slice(-7).reduce((a, b) => a + b, 0))}
+              </div>
+              <div className="gradient-card__sub">{can("empresa") ? "receita recorrente em 12 meses" : "pessoas alcançadas esta semana"}</div>
+              <GradientLine values={can("empresa") ? mrr : daily.slice(-14)} format={can("empresa") ? (n) => `${compact(n)} €` : compact} height={110} />
+            </section>
           </div>
-          <div className="tabs" style={{ padding: "0 18px", marginBottom: 0 }} role="tablist">
-            {([["proximas", "Próximas"], ["atrasadas", "Atrasadas"], ["concluidas", "Concluídas"]] as const).map(([id, label]) => (
-              <button key={id} role="tab" className="tab" aria-selected={taskTab === id} onClick={() => setTaskTab(id)}>
-                {label}
-                {id === "atrasadas" && taskLists.atrasadas.length > 0 && <span className="count due--late">{taskLists.atrasadas.length}</span>}
-              </button>
-            ))}
+
+          {/* Upcoming posts, like "Upcoming payments" */}
+          <section className="card card__body">
+            <div className="spread" style={{ marginBottom: 8 }}>
+              <h2 className="card-title">Publicações de hoje e amanhã</h2>
+              <Link href="/calendario" className="pill-link">Ver todas</Link>
+            </div>
+            <div className="rows">
+              {agenda.map((p) => (
+                <Link key={p.id} href="/calendario" className="rows__item">
+                  <span className="rows__icon"><NetIcon id={p.networks[0]} size={18} /></span>
+                  <span className="rows__title truncate">{p.caption}</span>
+                  <span className={`date-pill ${sameDay(p.date, NOW) ? "is-today" : ""}`}>{sameDay(p.date, NOW) ? "Hoje" : "Amanhã"}</span>
+                  <span className="rows__meta truncate hide-sm">{client(p.clientId)!.name}</span>
+                  <span className="rows__value num">{time(p.date)}</span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        {/* Right column, sitting on the frame like "Transactions" */}
+        <aside className="home__side">
+          <div className="spread">
+            <div>
+              <h2 className="side-title">Tarefas</h2>
+              <p className="faint" style={{ fontSize: 13 }}>As tuas próximas</p>
+            </div>
+            <div className="row">
+              <Link href="/tarefas" className="icon-btn" aria-label="Procurar tarefas"><Search size={17} /></Link>
+              <Link href="/tarefas" className="pill-link">Ver todas</Link>
+            </div>
           </div>
-          <div>
-            {taskLists[taskTab].slice(0, 6).map((t) => (
-              <Link key={t.id} href={`/tarefas?t=${t.id}`} className="row" style={{ padding: "9px 18px", borderBottom: "1px solid var(--line)", gap: 10 }}>
-                <CheckCircle checked={t.done} label={`Concluir: ${t.title}`} onToggle={() => saveTask({ ...t, done: !t.done })} />
-                <span className={`grow truncate ${t.done ? "done-text" : ""}`}>{t.title}</span>
-                {t.clientId && <span className="tag" style={{ maxWidth: 120 }}><span className="truncate">{client(t.clientId)!.name}</span></span>}
-                <span style={{ fontSize: 13, minWidth: 54, textAlign: "right" }}><Due date={t.due} done={t.done} /></span>
+          <div className="rows rows--plain">
+            {mine.map((t) => {
+              const late = t.due && t.due < startToday;
+              const sec = TASK_SECTIONS.find((s) => s.id === t.section)!;
+              return (
+                <Link key={t.id} href={`/tarefas?t=${t.id}`} className="rows__item">
+                  <span className="rows__icon rows__icon--check">
+                    <CheckCircle checked={t.done} label={`Concluir: ${t.title}`} onToggle={() => saveTask({ ...t, done: !t.done })} />
+                  </span>
+                  <span className="rows__title truncate">{t.title}</span>
+                  <span className={`status-pill ${t.section === "curso" || late ? "is-pending" : ""}`}>{late ? "Atrasada" : sec.name}</span>
+                  <span className="rows__value"><Due date={t.due} /></span>
+                </Link>
+              );
+            })}
+          </div>
+
+          {alerts.length > 0 && (
+            <div className="tip">
+              <h3>{alerts[0].title}</h3>
+              <p>{alerts[0].text}</p>
+              {allAlerts &&
+                alerts.slice(1).map((a) => (
+                  <Link key={a.title} href={a.href} className="tip__more">
+                    <b>{a.title}</b>
+                    <span>{a.text}</span>
+                  </Link>
+                ))}
+              <div className="row" style={{ gap: 14 }}>
+                <Link href={alerts[0].href} className="tip__link">Resolver</Link>
+                {alerts.length > 1 && (
+                  <button className="tip__link" onClick={() => setAllAlerts(!allAlerts)}>
+                    {allAlerts ? "Mostrar menos" : `Mais ${alerts.length - 1} alertas`}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Quick action card, like "Quick transfer" */}
+          <section className="card card__body quick">
+            <div className="spread">
+              <h2 className="card-title">Enviar para aprovação</h2>
+              <span className="faint" style={{ fontSize: 12 }}>por cliente</span>
+            </div>
+            <div className="quick__people">
+              <Link href="/calendario?novo=1" className="quick__person">
+                <span className="quick__add"><Plus size={18} /></span>
+                <span>Novo post</span>
               </Link>
-            ))}
-            {!taskLists[taskTab].length && <div className="empty">Nada por aqui. 🎉</div>}
-          </div>
-        </section>
+              {CLIENTS.slice(0, 4).map((c) => (
+                <button key={c.id} className={`quick__person ${pick === c.id ? "is-on" : ""}`} onClick={() => { setPick(c.id); setSent(null); }}>
+                  <ClientTile clientId={c.id} size={44} />
+                  <span className="truncate">{c.name.split(" ")[0]}</span>
+                </button>
+              ))}
+            </div>
+            <div className="quick__foot">
+              <div>
+                <div className="quick__value">{sent === pick ? "Enviado" : `${toSend.length} ${toSend.length === 1 ? "post" : "posts"}`}</div>
+                <div className="faint" style={{ fontSize: 12 }}>{sent === pick ? "o cliente recebeu o aviso" : "prontos em produção"}</div>
+              </div>
+              <button
+                className="btn btn--primary btn--lg"
+                disabled={!toSend.length}
+                onClick={() => {
+                  toSend.forEach((p) => sendToClient(p.id, me.id));
+                  setSent(pick);
+                }}
+              >
+                <Send size={15} /> Enviar
+              </button>
+            </div>
+          </section>
 
-        {/* Content approvals */}
-        <section className="widget">
-          <div className="widget__head">
-            <h2 className="grow">Aprovações de conteúdo</h2>
-            <Link href="/conteudo">Abrir</Link>
-          </div>
-          <div className="grid" style={{ gridTemplateColumns: "repeat(3, minmax(0,1fr))", gap: 8, padding: "0 18px 12px" }}>
-            <Link href="/conteudo" className="card" style={{ padding: 12 }}>
-              <div className="kpi__value" style={{ fontSize: 24, marginTop: 0 }}>{withClient.length}</div>
-              <div className="faint" style={{ fontSize: 12 }}>com o cliente</div>
-            </Link>
-            <Link href="/conteudo" className="card" style={{ padding: 12 }}>
-              <div className="kpi__value" style={{ fontSize: 24, marginTop: 0, color: "var(--info)" }}>{toConfirm.length}</div>
-              <div className="faint" style={{ fontSize: 12 }}>aprovados, por confirmar</div>
-            </Link>
-            <Link href="/conteudo" className="card" style={{ padding: 12 }}>
-              <div className="kpi__value" style={{ fontSize: 24, marginTop: 0, color: rejected.length ? "var(--bad)" : undefined }}>{rejected.length}</div>
-              <div className="faint" style={{ fontSize: 12 }}>com alterações pedidas</div>
-            </Link>
-          </div>
-          {[...toConfirm, ...rejected].slice(0, 4).map((p) => (
-            <Link key={p.id} href="/conteudo" className="row" style={{ padding: "9px 18px", borderTop: "1px solid var(--line)", gap: 10 }}>
-              {p.status === "todo" ? <RotateCcw size={15} style={{ color: "var(--bad)", flex: "none" }} /> : <ClientTile clientId={p.clientId} size={18} />}
-              <span className="grow truncate">{p.caption}</span>
-              <PostStatusLozenge status={p.status} />
-            </Link>
-          ))}
-        </section>
-
-        {/* Agenda */}
-        <section className="widget">
-          <div className="widget__head">
-            <h2 className="grow">Publicações de hoje e amanhã</h2>
-            <Link href="/calendario">Calendário</Link>
-          </div>
-          {agenda.map((p) => (
-            <Link href="/calendario" key={p.id} className="timeline-item">
-              <time className={p.status === "publicado" ? "faint" : ""}>
-                {time(p.date)}
-                <div className="faint" style={{ fontSize: 11, fontWeight: 500 }}>{sameDay(p.date, NOW) ? "hoje" : "amanhã"}</div>
-              </time>
-              <div style={{ minWidth: 0 }}>
-                <div className="row">
-                  <span className="grow truncate" style={{ fontWeight: 500 }}>{p.caption}</span>
-                  {p.networks.map((n) => <NetIcon key={n} id={n} size={18} />)}
-                </div>
-                <div className="row faint" style={{ marginTop: 4, fontSize: 12 }}>
-                  <ClientTile clientId={p.clientId} size={16} />
-                  <span className="grow">{client(p.clientId)!.name} · {p.kind}</span>
-                  <PostStatusLozenge status={p.status} />
-                </div>
-              </div>
-            </Link>
-          ))}
-        </section>
-
-        {/* Attention */}
-        <section className="widget">
-          <div className="widget__head">
-            <h2 className="grow">Precisa de atenção</h2>
-          </div>
-          {negative.map((m) => (
-            <Link key={m.id} href={`/inbox?m=${m.id}`} className="row" style={{ padding: "10px 18px", borderTop: "1px solid var(--line)", alignItems: "flex-start", gap: 10 }}>
-              <AlertTriangle size={16} style={{ color: "var(--bad)", marginTop: 2, flex: "none" }} />
-              <div className="grow">
-                <div style={{ fontWeight: 600 }}>Comentário negativo · {client(m.clientId)!.name}</div>
-                <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>«{m.text}»</div>
-              </div>
-            </Link>
-          ))}
-          {lateReplies.map((m) => (
-            <Link key={m.id} href={`/inbox?m=${m.id}`} className="row" style={{ padding: "10px 18px", borderTop: "1px solid var(--line)", alignItems: "flex-start", gap: 10 }}>
-              <Clock size={16} style={{ color: "var(--warn)", marginTop: 2, flex: "none" }} />
-              <div className="grow">
-                <div style={{ fontWeight: 600 }}>Sem resposta há mais de 4 horas · {client(m.clientId)!.name}</div>
-                <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>{m.author}: «{m.text}»</div>
-              </div>
-            </Link>
-          ))}
-          {detractors.map((n) => (
-            <Link key={n!.id} href="/operacao" className="row" style={{ padding: "10px 18px", borderTop: "1px solid var(--line)", alignItems: "flex-start", gap: 10 }}>
-              <Frown size={16} style={{ color: "var(--bad)", marginTop: 2, flex: "none" }} />
-              <div className="grow">
-                <div style={{ fontWeight: 600 }}>{client(n!.clientId)!.name} deu {n!.score}/10 na satisfação</div>
-                <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>{n!.comment ? `«${n!.comment}»` : "Ligar esta semana."}</div>
-              </div>
-            </Link>
-          ))}
-          {CLIENT_ECONOMICS.filter((e) => e.contractEnd.getTime() - NOW.getTime() < 90 * 864e5).map((e) => (
-            <Link key={e.clientId} href={can("empresa") ? "/empresa" : `/clientes/${e.clientId}`} className="row" style={{ padding: "10px 18px", borderTop: "1px solid var(--line)", alignItems: "flex-start", gap: 10 }}>
-              <ClientTile clientId={e.clientId} size={18} />
-              <div className="grow">
-                <div style={{ fontWeight: 600 }}>Contrato da {client(e.clientId)!.name} renova em {Math.round((e.contractEnd.getTime() - NOW.getTime()) / 864e5)} dias</div>
-                <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>Marcar reunião de renovação com resultados do trimestre.</div>
-              </div>
-            </Link>
-          ))}
           {can("empresa") && (
-            <Link href="/empresa" style={{ display: "block", padding: "12px 18px 16px", borderTop: "1px solid var(--line)" }}>
+            <Link href="/empresa" className="mini-meter">
               <div className="spread" style={{ fontSize: 13 }}>
                 <span style={{ fontWeight: 600 }}>Receita recorrente vs. break-even</span>
-                <span className="num">{money(mrr)} / {money(breakEven)}</span>
+                <span className="num faint">{money(mrr[11])} / {money(FINANCE.fixed.reduce((a, f) => a + f.value, 0) / (1 - FINANCE.variableRate))}</span>
               </div>
               <div className="progress" style={{ marginTop: 8 }}>
-                <i style={{ width: `${Math.min(100, (mrr / breakEven) * 100)}%`, background: mrr >= breakEven ? "var(--good-strong)" : "var(--warn)" }} />
+                <i style={{ width: `${Math.min(100, (mrr[11] / (FINANCE.fixed.reduce((a, f) => a + f.value, 0) / (1 - FINANCE.variableRate))) * 100)}%` }} />
               </div>
             </Link>
           )}
-        </section>
+        </aside>
       </div>
-
-      <div className="section-title">
-        <h2>Clientes</h2>
-        <Link href="/clientes">Ver todos</Link>
-      </div>
-      <div className="grid grid--4">
-        {CLIENTS.map((c) => {
-          const stats = SOCIAL[c.id];
-          const followers = stats.reduce((a, s) => a + s.followers, 0);
-          const growth = stats.reduce((a, s) => a + s.followersDelta, 0);
-          const series = Array.from({ length: 30 }, (_, i) => stats.reduce((a, s) => a + s.reachSeries[i], 0));
-          return (
-            <Link key={c.id} href={`/clientes/${c.id}`} className="client-card">
-              <div className="row" style={{ gap: 10 }}>
-                <ClientTile clientId={c.id} size={32} />
-                <div className="grow" style={{ minWidth: 0 }}>
-                  <div className="truncate" style={{ fontWeight: 600 }}>{c.name}</div>
-                  <div className="faint truncate" style={{ fontSize: 12 }}>{c.sector}</div>
-                </div>
-              </div>
-              <div className="spread" style={{ marginTop: 12, alignItems: "flex-end" }}>
-                <div>
-                  <div style={{ fontSize: 20, fontWeight: 600 }} className="num">{compact(followers)}</div>
-                  <div className="faint" style={{ fontSize: 12 }}>seguidores · <span className="delta--up">+{num(growth)}</span></div>
-                </div>
-                <Sparkline values={series} color="var(--series-1)" />
-              </div>
-            </Link>
-          );
-        })}
-      </div>
-
-      {can("crm") && (
-        <>
-          <div className="section-title">
-            <h2>Negócios em curso</h2>
-            <Link href="/crm/pipeline">Pipeline</Link>
-          </div>
-          <div className="list">
-            {openDeals.slice(0, 4).map((d) => (
-              <Link key={d.id} href="/crm/pipeline" className="list-item" style={{ alignItems: "center" }}>
-                <Avatar userId={d.owner} size={26} />
-                <div className="grow">
-                  <div style={{ fontWeight: 600 }}>{company(d.companyId).name}</div>
-                  <div className="faint" style={{ fontSize: 12 }}>{d.title} · {d.next ?? "sem próximo passo"}</div>
-                </div>
-                <span className="badge">{d.stage}</span>
-                <span className="num" style={{ fontWeight: 600, minWidth: 90, textAlign: "right" }}>
-                  {money(d.value)}{d.recurring && <span className="faint" style={{ fontWeight: 400 }}>/mês</span>}
-                </span>
-              </Link>
-            ))}
-            <Link href="/crm/pipeline" className="list-item" style={{ color: "var(--primary)", fontSize: 13, fontWeight: 500 }}>
-              Ver pipeline completo <ArrowRight size={14} style={{ marginLeft: "auto" }} />
-            </Link>
-          </div>
-        </>
-      )}
-    </>
+    </div>
   );
 }

@@ -21,8 +21,7 @@ import {
   KanbanSquare,
   ListChecks,
   Menu,
-  PanelLeftClose,
-  PanelLeftOpen,
+  Settings2,
   Monitor,
   Moon,
   Plus,
@@ -322,25 +321,147 @@ function Crumbs() {
   );
 }
 
+type Section = { id: string; label: string; icon: LucideIcon; href?: string; count?: number; alert?: boolean; items?: NavItem[]; extra?: ReactNode };
+
+/** Desktop icon rail: top-level sections, each with a flyout of its pages. */
+function Rail({ onSearch }: { onSearch: () => void }) {
+  const pathname = usePathname();
+  const { can } = useSession();
+  const groups = useGroups();
+  const [open, setOpen] = useState<string | null>(null);
+  const railRef = useRef<HTMLElement>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => setOpen(null), [pathname]);
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (railRef.current && !railRef.current.contains(e.target as Node)) setOpen(null);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  const allowed = (items: NavItem[]) => items.filter((i) => !i.perm || can(i.perm));
+  const [main, content, analysis, business, agency] = groups;
+  const mgmt = allowed(business.items.filter((i) => i.href === "/empresa" || i.href === "/operacao"));
+  const sections = ([
+    ...allowed(main.items).map((i): Section => ({ id: i.href, label: i.label, icon: i.icon, href: i.href, count: i.count, alert: i.alert })),
+    { id: "conteudo", label: "Conteúdo", icon: CheckCircle2, items: allowed(content.items), count: content.items[0].count, alert: true },
+    {
+      id: "clientes", label: "Clientes", icon: BriefcaseBusiness, items: allowed(analysis.items),
+      extra: (
+        <div className="flyout__clients">
+          {CLIENTS.map((c) => (
+            <Link key={c.id} href={`/clientes/${c.id}`} className="flyout__link" aria-current={pathname === `/clientes/${c.id}` ? "page" : undefined}>
+              <ClientTile clientId={c.id} size={20} />
+              <span className="truncate">{c.name}</span>
+            </Link>
+          ))}
+        </div>
+      ),
+    },
+    { id: "negocio", label: "Negócio", icon: KanbanSquare, items: allowed(business.items.filter((i) => i.href !== "/empresa" && i.href !== "/operacao")) },
+    { id: "gestao", label: "Gestão", icon: Building2, items: mgmt },
+    { id: "agencia", label: "Agência", icon: Users, items: allowed(agency.items) },
+  ] as Section[]).filter((sct) => sct.href || sct.items?.length);
+
+  const activeSection = (sct: Section) =>
+    sct.href ? isActive(pathname, sct.href) : !!sct.items?.some((i) => isActive(pathname, i.href)) || (sct.id === "clientes" && pathname.startsWith("/clientes"));
+
+  const hover = (id: string | null) => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    if (id) setOpen(id);
+    else closeTimer.current = setTimeout(() => setOpen(null), 180);
+  };
+
+  return (
+    <aside className="rail" ref={railRef} onMouseLeave={() => hover(null)}>
+      <Link href="/" className="rail__logo" aria-label="Mesa — início">
+        <LogoMark />
+      </Link>
+      <nav className="rail__nav" aria-label="Principal">
+        {sections.map((sct) => {
+          const active = activeSection(sct);
+          const body = (
+            <>
+              <sct.icon size={20} strokeWidth={1.8} />
+              {!!sct.count && <span className={`rail__badge ${sct.alert ? "is-alert" : ""}`}>{sct.count}</span>}
+            </>
+          );
+          return (
+            <div key={sct.id} className="rail__item" onMouseEnter={() => hover(sct.id)}>
+              {sct.href ? (
+                <Link href={sct.href} className="rail__btn" aria-current={active ? "page" : undefined} aria-label={sct.label}>
+                  {body}
+                </Link>
+              ) : (
+                <button
+                  className="rail__btn"
+                  aria-current={active ? "page" : undefined}
+                  aria-expanded={open === sct.id}
+                  aria-label={sct.label}
+                  onClick={() => setOpen(open === sct.id ? null : sct.id)}
+                >
+                  {body}
+                </button>
+              )}
+              {open === sct.id && (
+                <div className="flyout" role="menu" onMouseEnter={() => hover(sct.id)}>
+                  <div className="flyout__title">{sct.label}</div>
+                  {sct.items?.map((i) => (
+                    <Link key={i.href} href={i.href} className="flyout__link" role="menuitem" aria-current={isActive(pathname, i.href) ? "page" : undefined}>
+                      <i.icon size={17} strokeWidth={1.8} />
+                      <span className="grow">{i.label}</span>
+                      {!!i.count && <span className={`rail__count ${i.alert ? "is-alert" : ""}`}>{i.count}</span>}
+                    </Link>
+                  ))}
+                  {!sct.items && <span className="faint" style={{ fontSize: 12, padding: "0 10px" }}>{sct.label}</span>}
+                  {sct.extra && (
+                    <>
+                      <div className="flyout__title" style={{ marginTop: 8 }}>Os teus clientes</div>
+                      {sct.extra}
+                    </>
+                  )}
+                </div>
+              )}
+              {open !== sct.id && <span className="rail__tip">{sct.label}</span>}
+            </div>
+          );
+        })}
+      </nav>
+      <div className="rail__foot">
+        <Link href="/calendario?novo=1" className="rail__btn rail__btn--create" aria-label="Criar publicação">
+          <Plus size={20} strokeWidth={2.2} />
+        </Link>
+        <button className="rail__btn" onClick={onSearch} aria-label="Procurar (⌘K)">
+          <Search size={19} strokeWidth={1.8} />
+        </button>
+        <div className="rail__item" onMouseEnter={() => hover("settings")}>
+          <button className="rail__btn" aria-label="Preferências" aria-expanded={open === "settings"} onClick={() => setOpen(open === "settings" ? null : "settings")}>
+            <Settings2 size={19} strokeWidth={1.8} />
+          </button>
+          {open === "settings" && (
+            <div className="flyout flyout--up" onMouseEnter={() => hover("settings")}>
+              <div className="flyout__title">Preferências</div>
+              <div className="stack" style={{ gap: 10, padding: "4px 6px 6px" }}>
+                <ThemeSwitch />
+                <RoleSwitch />
+              </div>
+            </div>
+          )}
+          {open !== "settings" && <span className="rail__tip">Preferências</span>}
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 export function Shell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { viewAs, can, user } = useSession();
   const unread = unreadFor(user.id);
   const [sheet, setSheet] = useState(false);
-  const [rail, setRail] = useState(false);
-  useEffect(() => {
-    try {
-      setRail(localStorage.getItem("mesa:rail") === "1");
-    } catch {}
-  }, []);
-  const toggleRail = () =>
-    setRail((r) => {
-      try {
-        localStorage.setItem("mesa:rail", r ? "0" : "1");
-      } catch {}
-      return !r;
-    });
   const [palette, setPalette] = useState(false);
 
   // Clients never see the agency workspace — only their own portal.
@@ -378,70 +499,51 @@ export function Shell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className={`shell ${rail ? "is-rail" : ""}`}>
-      <aside className="sidebar">
-        <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>
-          <Link href="/" className="logo">
-            <LogoMark />
-            <span className="logo__text">Mesa</span>
-          </Link>
-          <button className="icon-btn rail-toggle" onClick={toggleRail} aria-label={rail ? "Expandir menu" : "Encolher menu"} title={rail ? "Expandir menu" : "Encolher menu"}>
-            {rail ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
-          </button>
-        </div>
-        <Link href="/calendario?novo=1" className="side-cta" title="Criar publicação">
-          <span><Plus size={14} strokeWidth={2.5} /></span>
-          <span className="side-cta__label">Criar</span>
-        </Link>
-        <nav aria-label="Principal">
-          <NavLinks />
-        </nav>
-        <div className="sidebar__foot">
-          <RoleSwitch />
-          <ThemeSwitch />
-        </div>
-      </aside>
+    <div className="shell">
+      <div className="frame">
+        <Rail onSearch={() => setPalette(true)} />
 
-      <div style={{ minWidth: 0 }}>
-        <header className="topbar">
-          <div className="topbar__title">
-            <Link href="/" className="logo only-mobile">
-              <LogoMark />
-              Mesa
+        <div className="frame__main">
+          <header className="topbar">
+            <div className="topbar__title">
+              <Link href="/" className="logo only-mobile">
+                <LogoMark />
+                Mesa
+              </Link>
+              <nav className="topbar__crumbs" aria-label="Localização">
+                <Crumbs />
+              </nav>
+            </div>
+            <TimerPill />
+            <button className="topbar__search" onClick={() => setPalette(true)}>
+              <Search size={15} />
+              Procurar
+              <kbd>⌘K</kbd>
+            </button>
+            <button className="icon-btn only-mobile" onClick={() => setPalette(true)} aria-label="Procurar">
+              <Search size={19} />
+            </button>
+            <Link href="/inbox" className="icon-btn" aria-label={`Notificações: ${unread} por ler`}>
+              <Bell size={19} />
+              {unread > 0 && <span className="dot" />}
             </Link>
-            <nav className="topbar__crumbs" aria-label="Localização">
-              <Crumbs />
-            </nav>
-          </div>
-          <TimerPill />
-          <button className="topbar__search" onClick={() => setPalette(true)}>
-            <Search size={15} />
-            Procurar
-            <kbd>⌘K</kbd>
-          </button>
-          <button className="icon-btn only-mobile" onClick={() => setPalette(true)} aria-label="Procurar">
-            <Search size={19} />
-          </button>
-          <Link href="/inbox" className="icon-btn" aria-label={`Notificações: ${unread} por ler`}>
-            <Bell size={19} />
-            {unread > 0 && <span className="dot" />}
-          </Link>
-          <span className="avatar" style={{ ["--size" as string]: "30px", ["--av" as string]: avatarColor(user.name) }} title={user.name}>
-            {user.name.split(" ").map((p) => p[0]).slice(0, 2).join("")}
-          </span>
-        </header>
-
-        {viewAs !== "ceo" && (
-          <div className="notice notice--info" style={{ borderRadius: 0 }}>
-            <Eye size={16} />
-            <span>
-              Estás a ver a Mesa como <strong>{ROLES.find((r) => r.id === viewAs)?.name}</strong>. Os menus e as ações
-              mudam conforme as permissões do papel.
+            <span className="avatar topbar__me" style={{ ["--av" as string]: avatarColor(user.name) }} title={user.name}>
+              {user.name.split(" ").map((p) => p[0]).slice(0, 2).join("")}
             </span>
-          </div>
-        )}
+          </header>
 
-        <main className="main">{children}</main>
+          {viewAs !== "ceo" && (
+            <div className="notice notice--info view-as">
+              <Eye size={16} />
+              <span>
+                Estás a ver a Mesa como <strong>{ROLES.find((r) => r.id === viewAs)?.name}</strong>. Os menus e as ações
+                mudam conforme as permissões do papel.
+              </span>
+            </div>
+          )}
+
+          <main className="main" key={pathname}>{children}</main>
+        </div>
       </div>
 
       <nav className="tabbar" aria-label="Navegação rápida">

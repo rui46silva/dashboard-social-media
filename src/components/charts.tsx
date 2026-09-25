@@ -112,7 +112,7 @@ export function LineChart({
             </text>
           ) : null,
         )}
-        {series.map((s) => {
+        {series.map((s, si) => {
           const d = s.values.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
           return (
             <g key={s.id}>
@@ -121,9 +121,20 @@ export function LineChart({
                   d={`${d}L${x(n - 1)},${y(0)}L${x(0)},${y(0)}Z`}
                   fill={s.color}
                   opacity={0.1}
+                  className="chart-area"
                 />
               )}
-              <path d={d} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+              <path
+                d={d}
+                fill="none"
+                stroke={s.color}
+                strokeWidth={2}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+                pathLength={1}
+                className="chart-line"
+                style={{ animationDelay: `${si * 120}ms` }}
+              />
             </g>
           );
         })}
@@ -137,7 +148,7 @@ export function LineChart({
           <g>
             <line x1={x(hover)} x2={x(hover)} y1={pad.top} y2={pad.top + h} stroke="var(--ink-3)" strokeDasharray="3 3" />
             {series.map((s) => (
-              <circle key={s.id} cx={x(hover)} cy={y(s.values[hover])} r={4.5} fill={s.color} stroke="var(--surface)" strokeWidth={2} />
+              <circle key={s.id} className="chart-dot" cx={x(hover)} cy={y(s.values[hover])} r={4.5} fill={s.color} stroke="var(--surface)" strokeWidth={2} />
             ))}
           </g>
         )}
@@ -168,7 +179,7 @@ export function Sparkline({ values, color = "var(--ink-2)", width = 88, height =
     .join("");
   return (
     <svg width={width} height={height} aria-hidden style={{ display: "block", overflow: "visible" }}>
-      <path d={d} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+      <path d={d} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" pathLength={1} className="chart-line" />
     </svg>
   );
 }
@@ -243,6 +254,77 @@ export function Heatmap({ data, rows, cols }: { data: number[][]; rows: string[]
           mais
         </span>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Frosted pill bars with one highlighted bar and a floating value label —
+ * for a handful of periods (weeks, months). Hover moves the highlight.
+ */
+export function GlassBars({
+  data,
+  format = compact,
+  height = 150,
+}: {
+  data: { label: string; value: number }[];
+  format?: (n: number) => string;
+  height?: number;
+}) {
+  const [active, setActive] = useState(data.length - 1);
+  const max = Math.max(...data.map((d) => d.value)) || 1;
+  return (
+    <div className="gbars" style={{ height: height + 28 }} role="img" aria-label={data.map((d) => `${d.label}: ${format(d.value)}`).join(", ")}>
+      {data.map((d, i) => {
+        const h = Math.max(18, (d.value / max) * height);
+        const on = i === active;
+        return (
+          <div key={d.label} className="gbars__col" onMouseEnter={() => setActive(i)} onFocus={() => setActive(i)} tabIndex={0}>
+            <div className="gbars__track" style={{ height }}>
+              <div className={`gbars__bar ${on ? "is-on" : ""}`} style={{ height: h, animationDelay: `${i * 70}ms` }}>
+                {on && (
+                  <span className="gbars__tip">
+                    <i />
+                    {format(d.value)}
+                  </span>
+                )}
+              </div>
+            </div>
+            <span className={`gbars__label ${on ? "is-on" : ""}`}>{d.label}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** White trend line for use on the accent gradient card, with start/end markers. */
+export function GradientLine({ values, format = compact, height = 120 }: { values: number[]; format?: (n: number) => string; height?: number }) {
+  const [ref, width] = useWidth<HTMLDivElement>();
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const pad = 14;
+  const x = (i: number) => pad + (i / (values.length - 1)) * (width - pad * 2);
+  const y = (v: number) => pad + (1 - (v - min) / (max - min || 1)) * (height - pad * 2);
+  // Smooth the line with simple cubic segments.
+  const d = values
+    .map((v, i) => {
+      if (!i) return `M${x(0)},${y(v)}`;
+      const px = x(i - 1);
+      const cx = (px + x(i)) / 2;
+      return `C${cx},${y(values[i - 1])} ${cx},${y(v)} ${x(i)},${y(v)}`;
+    })
+    .join("");
+  const last = values.length - 1;
+  return (
+    <div className="gline" ref={ref}>
+      <svg width={width} height={height} aria-hidden>
+        <path d={d} fill="none" stroke="rgba(255,255,255,0.95)" strokeWidth={2.5} strokeLinecap="round" pathLength={1} className="chart-line" />
+        <circle cx={x(0)} cy={y(values[0])} r={4} fill="#fff" className="chart-dot" />
+        <circle cx={x(last)} cy={y(values[last])} r={6} fill="#fff" stroke="rgba(255,255,255,0.35)" strokeWidth={6} className="chart-dot" style={{ animationDelay: "1s" }} />
+      </svg>
+      <span className="gline__label" style={{ left: x(0) + 8, top: y(values[0]) + 8 }}>{format(values[0])}</span>
+      <span className="gline__label" style={{ left: Math.min(x(last) - 12, width - 60), top: Math.max(0, y(values[last]) - 30) }}>{format(values[last])}</span>
     </div>
   );
 }
