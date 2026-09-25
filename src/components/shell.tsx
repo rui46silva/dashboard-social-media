@@ -44,7 +44,7 @@ const unreadFor = (userId: string) =>
   INBOX.filter((m) => m.unread && CLIENTS.find((c) => c.id === m.clientId)?.inboxOwner === userId).length;
 
 function useGroups(): { label: string; items: NavItem[] }[] {
-  const { posts, tasks } = useStore();
+  const { posts, tasks, fiscal } = useStore();
   const { user } = useSession();
   const endOfTomorrow = new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() + 2);
   const myDue = tasks.filter((t) => !t.done && t.assignee === user.id && t.due && t.due < endOfTomorrow).length;
@@ -80,7 +80,7 @@ function useGroups(): { label: string; items: NavItem[] }[] {
         { href: "/crm/pipeline", label: "Pipeline", icon: KanbanSquare, perm: "crm" },
         { href: "/crm/propostas", label: "Propostas", icon: FileSignature, perm: "crm" },
         { href: "/crm", label: "Contactos e empresas", icon: Contact, perm: "crm" },
-        { href: "/empresa", label: "Empresa", icon: Building2, perm: "empresa" },
+        { href: "/empresa", label: fiscal.entity === "independente" ? "A minha atividade" : "Empresa", icon: Building2, perm: "empresa" },
         { href: "/operacao", label: "Operação", icon: Gauge, perm: "gerir_clientes" },
       ],
     },
@@ -302,13 +302,14 @@ const CRUMB: Record<string, string> = {
 
 function Crumbs() {
   const pathname = usePathname();
+  const solo = useStore().fiscal.entity === "independente";
   const parts = pathname.split("/").filter(Boolean);
   if (!parts.length) return <strong>Início</strong>;
   return (
     <>
       {parts.map((p, i) => {
         const href = "/" + parts.slice(0, i + 1).join("/");
-        const label = CRUMB[p] ?? CLIENTS.find((c) => c.id === p)?.name ?? p;
+        const label = (p === "empresa" && solo ? "A minha atividade" : CRUMB[p]) ?? CLIENTS.find((c) => c.id === p)?.name ?? p;
         const last = i === parts.length - 1;
         return (
           <span key={href} className="row" style={{ gap: 6 }}>

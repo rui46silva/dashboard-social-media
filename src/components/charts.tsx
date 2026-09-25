@@ -13,7 +13,7 @@ function niceMax(v: number) {
   return step * exp;
 }
 
-function useWidth<T extends HTMLElement>() {
+export function useWidth<T extends HTMLElement>() {
   const ref = useRef<T>(null);
   const [width, setWidth] = useState(640);
   useEffect(() => {

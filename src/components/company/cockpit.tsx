@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { ArrowRight, ArrowUpRight, Check, ChevronDown, CircleAlert, ListPlus, Pencil, RotateCcw, SlidersHorizontal } from "lucide-react";
 import { CLIENT_ECONOMICS, NOW, USERS, user } from "@/lib/data";
 import {
-  RULES, TARGET_DEFS, evaluateAlerts, freeCash, grossMargin, newClientsThisQuarter, npsNow, receivables, utilization, weightedPipeline,
+  RULES, TARGET_DEFS, evaluateAlerts, isFreelancer, freeCash, grossMargin, newClientsThisQuarter, npsNow, receivables, utilization, weightedPipeline,
   type Alert, type Severity, type TargetId,
 } from "@/lib/company";
 import { money } from "@/lib/format";
@@ -62,7 +62,7 @@ function Targets() {
         return (
           <div key={d.id} className={`card target target--${lv}`}>
             <div className="target__top">
-              <span className="target__label">{d.label}</span>
+              <span className="target__label">{d.id === "ocupacao" && isFreelancer() ? "Ocupação" : d.label}</span>
               <span className={`lozenge lozenge--${lv}`}>
                 {LEVEL_LABEL[lv]}
               </span>
@@ -111,8 +111,13 @@ const when = (d: Date) => {
 };
 
 export function useAlerts() {
-  const { thresholds, targets, time, nps, invoicePaid } = useStore();
-  return useMemo(() => evaluateAlerts({ thresholds, targets, time, nps, paid: invoicePaid }), [thresholds, targets, time, nps, invoicePaid]);
+  const { thresholds, targets, time, nps, invoicePaid, goals, fiscal } = useStore();
+  return useMemo(
+    () => evaluateAlerts({ thresholds, targets, time, nps, paid: invoicePaid, goals }),
+    // fiscal is read through lib/company, so it must re-run the rules too
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [thresholds, targets, time, nps, invoicePaid, goals, fiscal],
+  );
 }
 
 function AlertRow({ a, open, onToggle }: { a: Alert; open: boolean; onToggle: () => void }) {

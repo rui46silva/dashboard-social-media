@@ -7162,3 +7162,458 @@ a.card:hover,
     text-align: left;
   }
 }
+
+/* ==========================================================================
+   Empresa — fiscal profile and goals
+   ========================================================================== */
+
+.fiscal-card {
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.fiscal-card__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  text-align: left;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+
+.fiscal-card__head:hover {
+  background: var(--surface-2);
+}
+
+.fiscal-card__head b {
+  display: block;
+}
+
+.fiscal-card__sub {
+  display: block;
+  font-size: 12px;
+}
+
+.fiscal-card__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.fiscal-card__toggle svg {
+  transition: transform var(--dur) var(--ease-out);
+}
+
+.fiscal-card__body {
+  display: grid;
+  gap: 20px;
+  padding: 4px 16px 18px;
+  animation: enter var(--dur) var(--ease-out) both;
+}
+
+@media (min-width: 960px) {
+  .fiscal-card__body {
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    gap: 28px;
+  }
+}
+
+.fiscal-card__form {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.fiscal-card__nums {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.fiscal-card__changes {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.fiscal-card__changes ul {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.segmented button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Big choice buttons (entity, goal metric) */
+.choice {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (min-width: 900px) {
+  .choice--4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.choice__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  text-align: left;
+  font-size: 13px;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+}
+
+.choice__item > svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--ink-2);
+}
+
+.choice__item b,
+.choice__item .faint {
+  display: block;
+}
+
+.choice__item .faint {
+  font-size: 12px;
+  font-weight: 400;
+  margin-top: 2px;
+}
+
+.choice__item:hover {
+  border-color: var(--accent);
+}
+
+.choice__item[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--info-bg);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+.choice__item[aria-pressed="true"] > svg {
+  color: var(--info);
+}
+
+.input-unit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+/* Goals */
+.goal-summary {
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.goal-grid {
+  display: grid;
+  gap: 12px;
+}
+
+@media (min-width: 1000px) {
+  .goal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.goal {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  min-width: 0;
+}
+
+.goal__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.goal__title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.goal__meta {
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.goal__numbers {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font-size: 13px;
+}
+
+.goal__current {
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+
+.goal__bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.goal__bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--good-strong);
+  animation: reveal-right var(--dur-slow) var(--ease-out) both 120ms;
+}
+
+.goal__bar--warn > i {
+  background: var(--series-4);
+}
+
+.goal__bar--bad > i {
+  background: var(--bad);
+}
+
+.goal__bar--info > i {
+  background: var(--accent);
+}
+
+.goal-chart {
+  width: 100%;
+  min-height: 150px;
+}
+
+.goal-chart--empty {
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+}
+
+.goal-chart svg {
+  display: block;
+  overflow: visible;
+}
+
+.goal-chart__target {
+  stroke: var(--ink-3);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+}
+
+.goal-chart__deadline {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.goal-chart__label {
+  fill: var(--ink-3);
+  font-size: 11px;
+}
+
+.goal-chart__label--strong {
+  fill: var(--ink-2);
+  font-weight: 600;
+}
+
+.goal-chart__line {
+  fill: none;
+  stroke: var(--series-1);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.goal-chart__raw {
+  fill: var(--series-1);
+  opacity: 0.25;
+}
+
+.goal-chart__dot,
+.goal-chart__now {
+  fill: var(--series-1);
+  stroke: var(--surface-solid);
+  stroke-width: 2;
+}
+
+.goal-chart__proj {
+  stroke-width: 2;
+  stroke-dasharray: 3 5;
+  stroke-linecap: round;
+  animation: fade var(--dur-slow) var(--ease-out) both 700ms;
+}
+
+.goal-chart__end {
+  stroke: var(--surface-solid);
+  stroke-width: 2;
+  animation: fade var(--dur-slow) var(--ease-out) both 900ms;
+}
+
+.goal-chart__proj--good {
+  stroke: var(--good-strong);
+}
+
+.goal-chart__proj--warn {
+  stroke: var(--series-4);
+}
+
+.goal-chart__proj--bad {
+  stroke: var(--bad);
+}
+
+.goal-chart__end--good {
+  fill: var(--good-strong);
+}
+
+.goal-chart__end--warn {
+  fill: var(--series-4);
+}
+
+.goal-chart__end--bad {
+  fill: var(--bad);
+}
+
+.goal__story {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: var(--r);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.goal__story > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--ink-3);
+}
+
+.goal__why {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.goal__log {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.goal__log-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.goal__checkin {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--r);
+  background: var(--surface-2);
+  animation: enter var(--dur) var(--ease-out) both;
+}
+
+.goal__checkin .field:first-child {
+  width: 110px;
+}
+
+.goal__checkin .grow {
+  min-width: 160px;
+}
+
+.goal__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.goal-editor {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  margin-bottom: 12px;
+}
+
+.goal-grid .goal-editor {
+  margin-bottom: 0;
+}
+
+.goal-editor__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.goal-editor__grid {
+  display: grid;
+  gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .goal-editor__grid {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+}
+
+@media (max-width: 639px) {
+  .fiscal-card__head {
+    align-items: flex-start;
+  }
+
+  .fiscal-card__sub {
+    display: none;
+  }
+
+  .fiscal-card__toggle {
+    font-size: 0;
+  }
+
+  .fiscal-card__toggle svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .fiscal-card__nums {
+    grid-template-columns: 1fr;
+  }
+}

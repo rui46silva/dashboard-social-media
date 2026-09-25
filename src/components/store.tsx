@@ -7,7 +7,8 @@ import {
   type Asset, type AuditEntry, type Client, type ClientProfile, type Notification, type NpsResponse, type Post, type PostComment,
   type Proposal, type Task, type TimeEntry,
 } from "@/lib/data";
-import { INVOICES, gross, type RuleId, type TargetId } from "@/lib/company";
+import { DEFAULT_FISCAL, INVOICES, gross, setFiscalProfile, type FiscalProfile, type RuleId, type TargetId } from "@/lib/company";
+import { GOALS, type CheckIn, type Goal } from "@/lib/goals";
 
 /**
  * Prototype data store. Everything that changes lives here so a change made in
@@ -40,6 +41,8 @@ type State = {
   alertState: Record<string, AlertState>;
   invoicePaid: Record<string, Date>;
   reminders: Record<string, Date[]>;
+  goals: Goal[];
+  fiscal: FiscalProfile;
 };
 
 type Store = State & {
@@ -72,6 +75,10 @@ type Store = State & {
   updateAlert: (key: string, patch: Partial<Omit<AlertState, "at" | "by" | "title">>, label: string) => void;
   markInvoicePaid: (id: string) => void;
   sendReminder: (id: string) => void;
+  saveGoal: (g: Goal) => void;
+  removeGoal: (id: string) => void;
+  addCheckin: (goalId: string, c: Omit<CheckIn, "date" | "by">) => void;
+  setFiscal: (patch: Partial<FiscalProfile>) => void;
   log: (action: string, target: string, who?: string) => void;
   reset: () => void;
 };
@@ -103,6 +110,8 @@ const SEED: State = {
   alertState: {},
   invoicePaid: {},
   reminders: {},
+  goals: GOALS,
+  fiscal: DEFAULT_FISCAL,
 };
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -349,6 +358,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ]);
       log("Enviou lembrete de pagamento", `${i.number} · ${getClient(i.clientId)?.name}`);
     },
+    saveGoal: (g) => {
+      const isNew = !s.goals.some((x) => x.id === g.id);
+      set("goals", (gs) => (isNew ? [...gs, g] : gs.map((x) => (x.id === g.id ? g : x))));
+      log(isNew ? "Criou meta" : "Editou meta", g.title);
+    },
+    removeGoal: (id) => {
+      const g = s.goals.find((x) => x.id === id);
+      set("goals", (gs) => gs.filter((x) => x.id !== id));
+      if (g) log("Apagou meta", g.title);
+    },
+    addCheckin: (goalId, c) =>
+      set("goals", (gs) => gs.map((g) => (g.id === goalId ? { ...g, checkins: [...g.checkins, { ...c, date: new Date(), by: "u-rui" }] } : g))),
+    setFiscal: (patch) => {
+      set("fiscal", (f) => {
+        const next = { ...f, ...patch };
+        if (next.entity === "sociedade" && next.vat === "isento") next.vat = "trimestral";
+        return next;
+      });
+      if (patch.entity || patch.vat) log("Mudou o perfil fiscal", [patch.entity, patch.vat].filter(Boolean).join(" · "));
+    },
     log,
     reset: () => {
       try {
@@ -357,6 +386,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       window.location.reload();
     },
   };
+
+  // Fiscal rules are read by the pure functions in lib/company during render.
+  setFiscalProfile(s.fiscal);
 
   // Saved clients are merged into the in-memory tables on load, so render only
   // after that — otherwise server and browser HTML would disagree.

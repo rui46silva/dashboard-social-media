@@ -7,6 +7,7 @@ import { dayMonth, money } from "@/lib/format";
 import { ClientTile, SectionTitle } from "@/components/ui";
 import { CountUp } from "@/components/count-up";
 import { useStore } from "@/components/store";
+import { isFreelancer, fiscal, WITHHOLDING } from "@/lib/company";
 
 const daysTo = (d: Date) => Math.round((d.getTime() - NOW.getTime()) / 864e5);
 const MON = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
@@ -151,7 +152,7 @@ export function Receivables() {
           </div>
         ))}
       </div>
-      <p className="faint" style={{ fontSize: 12, margin: "12px 0 0" }}>O lembrete vai por email para o contacto do cliente. No produto final, as faturas chegam do programa de faturação.</p>
+      <p className="faint" style={{ fontSize: 12, margin: "12px 0 0" }}>{isFreelancer() && fiscal().vat !== "isento" ? `Valores a receber já sem a retenção de IRS (${Math.round(WITHHOLDING * 100)}%) que o cliente entrega ao Estado por ti. ` : ""}O lembrete vai por email para o contacto do cliente. No produto final, as faturas chegam do programa de faturação.</p>
     </div>
   );
 }
@@ -159,7 +160,10 @@ export function Receivables() {
 /* ---------------------------------------------------------- fiscal calendar */
 
 export function FiscalCalendar() {
+  const { fiscal: profile } = useStore();
   const items = fiscalCalendar();
+  const who = profile.entity === "sociedade" ? "uma sociedade" : "um trabalhador independente";
+  const vat = profile.vat === "isento" ? "isento de IVA" : `com IVA ${profile.vat}`;
   return (
     <>
       <SectionTitle title="Calendário fiscal" />
@@ -187,7 +191,7 @@ export function FiscalCalendar() {
       </div>
       <div className="notice notice--info" style={{ marginTop: 12 }}>
         <Info size={16} />
-        <span>Datas de referência para uma Lda. com IVA trimestral. Valores estimados — confirma sempre com o contabilista certificado.</span>
+        <span>Datas de referência para {who} {vat}. Valores estimados — confirma sempre com o contabilista certificado.</span>
       </div>
     </>
   );

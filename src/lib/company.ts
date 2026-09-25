@@ -4,15 +4,55 @@
  * derived here so the cockpit, alerts and health scores always agree.
  */
 import {
-  CLIENTS, CLIENT_ECONOMICS, DEALS, FINANCE, NOW, PROFILES, USERS, client,
+  CLIENTS, CLIENT_ECONOMICS, DEALS, FINANCE, FIN_MONTHS, NOW, PROFILES, USERS, client,
   type NpsResponse, type Proposal, type TimeEntry,
 } from "./data";
+import { forecast, type Goal } from "./goals";
 
 const day = 864e5;
 const d = (y: number, m: number, dd: number) => new Date(y, m, dd, 12);
 const Y = NOW.getFullYear();
 const daysBetween = (a: Date, b: Date) => Math.round((b.getTime() - a.getTime()) / day);
 export const VAT = 0.23;
+
+/* ---------------------------------------------------------- fiscal profile */
+
+/**
+ * How the business is set up. A company (Lda. / Unipessoal) pays salaries and
+ * IRC; a sole trader (trabalhador independente, «recibos verdes») pays
+ * Segurança Social on what they bill, has IRS withheld by client companies and
+ * may be exempt from VAT. Reference rules only — confirm with the accountant.
+ */
+export type Entity = "sociedade" | "independente";
+export type VatRegime = "trimestral" | "mensal" | "isento";
+export type FiscalProfile = {
+  entity: Entity;
+  vat: VatRegime;
+  /** Independente: what the owner takes home each month. */
+  ownerPay: number;
+  /** Independente: estimated effective IRS rate on taxable income. */
+  irsRate: number;
+};
+
+export const DEFAULT_FISCAL: FiscalProfile = { entity: "sociedade", vat: "trimestral", ownerPay: 2000, irsRate: 28 };
+export const VAT_EXEMPT_LIMIT = 15000; // art. 53.º CIVA
+export const WITHHOLDING = 0.23; // retenção na fonte, categoria B
+export const SS_RATE = 0.214; // contribuição do independente
+export const SS_BASE = 0.7; // rendimento relevante = 70% dos serviços
+
+let FISCAL: FiscalProfile = DEFAULT_FISCAL;
+/** The store pushes the saved profile here, like the other in-memory registries. */
+export function setFiscalProfile(p: FiscalProfile) {
+  FISCAL = p.entity === "sociedade" && p.vat === "isento" ? { ...p, vat: "trimestral" } : p;
+}
+export const fiscal = () => FISCAL;
+export const isFreelancer = () => FISCAL.entity === "independente";
+const vatRate = () => (FISCAL.vat === "isento" ? 0 : VAT);
+/** Client companies withhold IRS on a freelancer's invoices (waived under the exemption limit). */
+const withholding = () => (FISCAL.entity === "independente" && FISCAL.vat !== "isento" ? WITHHOLDING : 0);
+
+export const ENTITY_LABEL: Record<Entity, string> = { sociedade: "Sociedade", independente: "Trabalhador independente" };
+export const VAT_LABEL: Record<VatRegime, string> = { trimestral: "IVA trimestral", mensal: "IVA mensal", isento: "Isento de IVA" };
 
 /* ---------------------------------------------------------------- invoices */
 
@@ -62,7 +102,8 @@ export const INVOICES: Invoice[] = [
   inv("orvalho", "Projeto", "Sessão fotográfica de outono", d(Y, 8, 20), 900, undefined, 30),
 ];
 
-export const gross = (i: Invoice) => i.net * (1 + VAT);
+/** What the client actually transfers: net + VAT − IRS withheld (freelancers). */
+export const gross = (i: Invoice) => i.net * (1 + vatRate()) - i.net * withholding();
 export const isPaid = (i: Invoice, paid: Record<string, Date>) => !!(i.paidAt || paid[i.id]);
 export const daysOverdue = (i: Invoice) => daysBetween(i.due, NOW);
 
@@ -98,46 +139,123 @@ export const PAYABLES = [
   { label: "Contabilidade — setembro", amount: 150 * (1 + VAT), due: d(Y, 9, 8) },
 ];
 
-export function vatThisQuarter() {
-  const qStart = new Date(Y, Math.floor(NOW.getMonth() / 3) * 3, 1);
-  const collected = INVOICES.filter((i) => i.issued >= qStart).reduce((a, i) => a + i.net * VAT, 0);
+const MONTH_NAMES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+
+/** Revenue billed per month over the last 12 months (recurring + projects). */
+const monthlyRevenue = () => FINANCE.recurring.map((r, i) => r + FINANCE.projects[i]);
+
+/** VAT collected minus VAT on running costs, for invoices issued from `from` on. */
+function vatSince(from: Date) {
+  if (FISCAL.vat === "isento") return { collected: 0, deductible: 0, due: 0 };
+  const collected = INVOICES.filter((i) => i.issued >= from).reduce((a, i) => a + i.net * VAT, 0);
   const deductibleMonthly = FINANCE.fixed.filter((f) => f.label !== "Salários e encargos" && f.label !== "Seguros").reduce((a, f) => a + f.value, 0) * VAT;
-  const months = NOW.getMonth() - qStart.getMonth() + 1;
+  const months = (NOW.getFullYear() - from.getFullYear()) * 12 + NOW.getMonth() - from.getMonth() + 1;
   return { collected, deductible: deductibleMonthly * months, due: Math.max(0, collected - deductibleMonthly * months) };
 }
+
+/** VAT already charged to clients that still has to go to the State. */
+export function vatOutstanding() {
+  if (FISCAL.vat === "trimestral") return { ...vatSince(new Date(Y, Math.floor(NOW.getMonth() / 3) * 3, 1)), label: "IVA a entregar (3.º tri)" };
+  // Monthly: last month's return is due on the 20th of the month after next, so two months are open.
+  return { ...vatSince(new Date(Y, NOW.getMonth() - 1, 1)), label: `IVA a entregar (${MONTH_NAMES[NOW.getMonth() - 1]} e ${MONTH_NAMES[NOW.getMonth()]})` };
+}
+
+/** Freelancer's monthly Segurança Social, set by last quarter's declared income. */
+export function ssMonthly() {
+  const rev = monthlyRevenue();
+  const lastQuarter = rev.slice(-6, -3); // apr–jun sets jul–sep payments
+  return Math.round((lastQuarter.reduce((a, b) => a + b, 0) / 3) * SS_BASE * SS_RATE);
+}
+
+/** Freelancer's IRS for the year so far, against what clients already withheld. */
+export function irsEstimate() {
+  const ytd = monthlyRevenue().filter((_, i) => FIN_MONTHS[i].getFullYear() === Y).reduce((a, b) => a + b, 0);
+  const taxable = ytd * 0.75; // regime simplificado: 75% dos serviços
+  const tax = taxable * (FISCAL.irsRate / 100);
+  const withheld = ytd * withholding();
+  return { ytd, taxable, tax, withheld, reserve: Math.max(0, tax - withheld), refund: Math.max(0, withheld - tax) };
+}
+
+/** Annual billing pace, to check the VAT exemption limit. */
+export const annualBilling = () => monthlyRevenue().reduce((a, b) => a + b, 0);
+
+/** Monthly fixed costs for the chosen setup (a freelancer pays themself instead of salaries). */
+export function fixedCosts() {
+  if (FISCAL.entity === "sociedade") return FINANCE.fixed;
+  return [
+    { label: "O teu ordenado", value: FISCAL.ownerPay },
+    { label: "Segurança Social", value: ssMonthly() },
+    ...FINANCE.fixed.filter((f) => f.label !== "Salários e encargos"),
+  ].sort((a, b) => b.value - a.value);
+}
+export const fixedTotal = () => fixedCosts().reduce((a, f) => a + f.value, 0);
 
 export const PAYROLL_MONTH = 3900; // salaries + employer social security, paid on the 30th
 export const IRC_INSTALMENT = 420; // pagamento por conta
 
 export type FiscalItem = { id: string; date: Date; title: string; detail: string; amount?: number; done?: boolean };
 
-/** Reference deadlines for a Lda. with quarterly VAT. Confirm with the certified accountant. */
+/** Reference deadlines for the chosen setup. Confirm with the certified accountant. */
 export function fiscalCalendar(): FiscalItem[] {
-  const vat = vatThisQuarter();
-  return [
-    { id: "ss-set", date: d(Y, 8, 20), title: "Segurança Social e retenções IRS", detail: "Pagamento referente a agosto", amount: 1480, done: true },
-    { id: "ppc2", date: d(Y, 8, 30), title: "2.º pagamento por conta de IRC", detail: "Modelo P1", amount: IRC_INSTALMENT },
-    { id: "saft-set", date: d(Y, 9, 5), title: "SAF-T de faturação", detail: "Comunicação das faturas de setembro" },
-    { id: "dmr-set", date: d(Y, 9, 10), title: "Declaração de remunerações e DMR", detail: "Segurança Social e retenções de setembro" },
-    { id: "ss-out", date: d(Y, 9, 20), title: "Segurança Social e retenções IRS", detail: "Pagamento referente a setembro", amount: 1480 },
-    { id: "saft-out", date: d(Y, 10, 5), title: "SAF-T de faturação", detail: "Comunicação das faturas de outubro" },
-    { id: "iva-q3", date: d(Y, 10, 20), title: "IVA do 3.º trimestre", detail: "Declaração periódica (pagamento até dia 25)", amount: Math.round(vat.due) },
-    { id: "ppc3", date: d(Y, 11, 15), title: "3.º pagamento por conta de IRC", detail: "Modelo P1", amount: IRC_INSTALMENT },
-  ];
+  const vat = vatOutstanding();
+  const items: FiscalItem[] = [];
+  if (FISCAL.vat === "trimestral")
+    items.push({ id: "iva-q3", date: d(Y, 10, 20), title: "IVA do 3.º trimestre", detail: "Declaração periódica (pagamento até dia 25)", amount: Math.round(vat.due) });
+  if (FISCAL.vat === "mensal") {
+    const half = Math.round(vat.due / 2);
+    items.push(
+      { id: "iva-jul", date: d(Y, 8, 20), title: "IVA de julho", detail: "Declaração periódica mensal", done: true },
+      { id: "iva-ago", date: d(Y, 9, 20), title: "IVA de agosto", detail: "Declaração periódica (pagamento até dia 25)", amount: half },
+      { id: "iva-set", date: d(Y, 10, 20), title: "IVA de setembro", detail: "Declaração periódica (pagamento até dia 25)", amount: half },
+    );
+  }
+
+  if (FISCAL.entity === "sociedade") {
+    items.push(
+      { id: "ss-set", date: d(Y, 8, 20), title: "Segurança Social e retenções IRS", detail: "Pagamento referente a agosto", amount: 1480, done: true },
+      { id: "ppc2", date: d(Y, 8, 30), title: "2.º pagamento por conta de IRC", detail: "Modelo P1", amount: IRC_INSTALMENT },
+      { id: "saft-set", date: d(Y, 9, 5), title: "SAF-T de faturação", detail: "Comunicação das faturas de setembro" },
+      { id: "dmr-set", date: d(Y, 9, 10), title: "Declaração de remunerações e DMR", detail: "Segurança Social e retenções de setembro" },
+      { id: "ss-out", date: d(Y, 9, 20), title: "Segurança Social e retenções IRS", detail: "Pagamento referente a setembro", amount: 1480 },
+      { id: "saft-out", date: d(Y, 10, 5), title: "SAF-T de faturação", detail: "Comunicação das faturas de outubro" },
+      { id: "ppc3", date: d(Y, 11, 15), title: "3.º pagamento por conta de IRC", detail: "Modelo P1", amount: IRC_INSTALMENT },
+    );
+  } else {
+    const ss = ssMonthly();
+    const irs = irsEstimate();
+    items.push(
+      { id: "ssi-set", date: d(Y, 8, 20), title: "Segurança Social", detail: "Contribuição de agosto", amount: ss, done: true },
+      { id: "ssi-out", date: d(Y, 9, 20), title: "Segurança Social", detail: "Contribuição de setembro", amount: ss },
+      { id: "ssi-decl", date: d(Y, 9, 31), title: "Declaração trimestral à Segurança Social", detail: "Rendimentos de julho a setembro, na Segurança Social Direta" },
+      { id: "ssi-nov", date: d(Y, 10, 20), title: "Segurança Social", detail: "Contribuição de outubro (já com o valor do 3.º trimestre)", amount: ss },
+      { id: "irs", date: d(Y + 1, 5, 30), title: "Declaração de IRS (anexo B)", detail: irs.refund > 0 ? `Entrega de 1 abr a 30 jun · reembolso estimado de ${Math.round(irs.refund).toLocaleString("pt-PT")} €` : "Entrega de 1 abr a 30 jun", amount: irs.reserve > 0 ? Math.round(irs.reserve) : undefined },
+    );
+  }
+  return items.sort((a, b) => a.date.getTime() - b.date.getTime());
 }
 
 export function freeCash() {
-  const vat = vatThisQuarter();
+  const vat = vatOutstanding();
   const payables = PAYABLES.reduce((a, p) => a + p.amount, 0);
-  const steps = [
-    { label: "Saldo no banco", value: FINANCE.cash },
-    { label: "IVA a entregar (3.º tri)", value: -vat.due },
-    { label: "Salários e SS de setembro", value: -PAYROLL_MONTH },
-    { label: "Fornecedores a pagar", value: -payables },
-    { label: "Pagamento por conta IRC", value: -IRC_INSTALMENT },
-  ];
+  const steps: { label: string; value: number }[] = [{ label: "Saldo no banco", value: FINANCE.cash }];
+  if (vat.due > 0) steps.push({ label: vat.label, value: -vat.due });
+  if (FISCAL.entity === "sociedade") {
+    steps.push(
+      { label: "Salários e SS de setembro", value: -PAYROLL_MONTH },
+      { label: "Fornecedores a pagar", value: -payables },
+      { label: "Pagamento por conta IRC", value: -IRC_INSTALMENT },
+    );
+  } else {
+    const irs = irsEstimate();
+    steps.push(
+      { label: "Segurança Social de setembro", value: -ssMonthly() },
+      { label: "O teu ordenado de outubro", value: -FISCAL.ownerPay },
+      { label: "Fornecedores a pagar", value: -payables },
+    );
+    if (irs.reserve > 0) steps.push({ label: "Reserva para o IRS", value: -irs.reserve });
+  }
   const free = steps.reduce((a, s) => a + s.value, 0);
-  const fixed = FINANCE.fixed.reduce((a, f) => a + f.value, 0);
+  const fixed = fixedTotal();
   return { steps, free, months: free / fixed, fixed };
 }
 
@@ -234,7 +352,7 @@ export function newClientsThisQuarter(proposals: Proposal[]) {
 
 export type RuleId =
   | "caixa" | "fatura" | "concentracao" | "renovacao" | "margem" | "ambito"
-  | "ocupacao" | "nps" | "aprovacao" | "pipeline" | "fiscal" | "saude";
+  | "ocupacao" | "nps" | "aprovacao" | "pipeline" | "fiscal" | "saude" | "meta" | "isencao";
 
 export type Severity = "alta" | "média" | "baixa";
 
@@ -262,6 +380,8 @@ export const RULES: Rule[] = [
   { id: "pipeline", label: "Pipeline ponderado abaixo de", unit: "× a meta de novos clientes", default: 2, comparator: "<", action: "Reforçar prospeção: 10 contactos novos esta semana", owner: "ceo", severity: "média" },
   { id: "fiscal", label: "Prazo fiscal a menos de", unit: "dias", default: 7, comparator: "<", action: "Confirmar valor com o contabilista e reservar caixa", owner: "ceo", severity: "alta" },
   { id: "saude", label: "Saúde de um cliente abaixo de", unit: "pontos", default: 50, comparator: "<", action: "Plano de recuperação com o gestor de conta", owner: "gestor", severity: "alta" },
+  { id: "meta", label: "Previsão de uma meta abaixo de", unit: "% do caminho", default: 85, comparator: "<", action: "Rever o plano da meta: mais esforço, mais prazo ou meta mais realista", owner: "ceo", severity: "média" },
+  { id: "isencao", label: "Faturação anual acima de", unit: "% do limite de isenção de IVA", default: 80, comparator: ">", action: "Falar com o contabilista sobre passar ao regime normal de IVA", owner: "ceo", severity: "alta" },
 ];
 
 export type Alert = {
@@ -280,6 +400,7 @@ type Ctx = {
   time: TimeEntry[];
   nps: NpsResponse[];
   paid: Record<string, Date>;
+  goals?: Goal[];
 };
 
 export function evaluateAlerts(ctx: Ctx): Alert[] {
@@ -330,7 +451,7 @@ export function evaluateAlerts(ctx: Ctx): Alert[] {
 
   const occ = utilization(ctx.time) * 100;
   if (occ > t("ocupacao"))
-    out.push({ key: "ocupacao", rule: rule("ocupacao"), title: `Equipa a ${Math.round(occ)}% da capacidade`, detail: "Na última semana.", href: "/operacao", owner: ceo });
+    out.push({ key: "ocupacao", rule: isFreelancer() ? { ...rule("ocupacao"), action: "Subir preços ou recusar trabalho novo até aliviar" } : rule("ocupacao"), title: `Equipa a ${Math.round(occ)}% da capacidade`, detail: "Na última semana.", href: "/operacao", owner: ceo });
 
   for (const c of CLIENTS) {
     const last = ctx.nps.filter((n) => n.clientId === c.id).sort((a, b) => b.date.getTime() - a.date.getTime())[0];
@@ -347,6 +468,21 @@ export function evaluateAlerts(ctx: Ctx): Alert[] {
     const left = daysBetween(NOW, f.date);
     if (left >= 0 && left < t("fiscal"))
       out.push({ key: `fiscal:${f.id}`, rule: rule("fiscal"), title: `${f.title} em ${left} dias`, detail: `${f.detail}${f.amount ? ` · ${money(f.amount)}` : ""}`, href: "/empresa?tab=financas", owner: ceo });
+  }
+
+  for (const g of ctx.goals ?? []) {
+    const f = forecast(g, fixedTotal());
+    const span = g.target - f.baseline || 1;
+    const onPath = ((f.projected - f.baseline) / span) * 100;
+    if (f.status !== "alcançada" && f.status !== "sem dados" && onPath < t("meta"))
+      out.push({ key: `meta:${g.id}`, rule: rule("meta"), title: `Meta «${g.title}» fora de rota`, detail: `Ao ritmo atual chega a ${Math.round(Math.max(0, Math.min(onPath, 100)))}% do caminho no prazo.`, href: "/empresa?tab=planeamento", owner: g.owner });
+  }
+
+  if (FISCAL.vat === "isento") {
+    const billed = annualBilling();
+    const share = (billed / VAT_EXEMPT_LIMIT) * 100;
+    if (share > t("isencao"))
+      out.push({ key: "isencao", rule: rule("isencao"), title: share > 100 ? `Faturação acima do limite de isenção de IVA` : `Faturação a ${Math.round(share)}% do limite de isenção de IVA`, detail: `${money(billed)} nos últimos 12 meses, para um limite de ${money(VAT_EXEMPT_LIMIT)}.`, href: "/empresa?tab=financas", owner: ceo });
   }
 
   const order: Record<Severity, number> = { alta: 0, média: 1, baixa: 2 };

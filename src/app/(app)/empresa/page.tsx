@@ -13,6 +13,9 @@ import { useStore } from "@/components/store";
 import { Cockpit, useAlerts } from "@/components/company/cockpit";
 import { FiscalCalendar, FreeCash, Receivables } from "@/components/company/finance";
 import { HealthBoard } from "@/components/company/health";
+import { ENTITY_LABEL, VAT_LABEL, fixedCosts, fixedTotal } from "@/lib/company";
+import { Goals } from "@/components/company/goals";
+import { FiscalProfileCard } from "@/components/company/fiscal";
 
 const TABS = [
   { id: "cockpit", label: "Cockpit" },
@@ -29,12 +32,9 @@ const mLabel = (d: Date) => `${MONTHS_SHORT[d.getMonth()]} ${String(d.getFullYea
 const rev = FINANCE.recurring.map((r, i) => r + FINANCE.projects[i]);
 const costs = rev.map((r, i) => FINANCE.fixedHistory[i] + r * FINANCE.variableRate);
 const profit = rev.map((r, i) => r - costs[i]);
-const fixedNow = FINANCE.fixed.reduce((a, f) => a + f.value, 0);
 const mrr = FINANCE.recurring[11];
-const breakEven = fixedNow / (1 - FINANCE.variableRate);
 const avgFee = mrr / CLIENT_ECONOMICS.length;
 const last3Profit = profit.slice(-3).reduce((a, b) => a + b, 0) / 3;
-const recurringProfit = mrr - fixedNow - mrr * FINANCE.variableRate;
 const churnMonthly = FINANCE.churnedLast12 / (3.5 * 12);
 const econ = CLIENT_ECONOMICS.map((e) => {
   const cost = e.hours * FINANCE.hourCost;
@@ -69,7 +69,7 @@ function project(s: Scenario) {
     base = base * (1 - s.churn / 100) + (s.newPerQuarter / 3) * s.fee;
     if (m === 3) base *= 1 + s.priceUp / 100; // price review at renewals
     const revenue = base + s.projects;
-    const fixed = fixedNow + (s.hire && m >= s.hireMonth ? s.hireCost : 0);
+    const fixed = fixedTotal() + (s.hire && m >= s.hireMonth ? s.hireCost : 0);
     const cost = fixed + revenue * FINANCE.variableRate;
     cash += revenue - cost;
     out.push({ date: new Date(NOW.getFullYear(), NOW.getMonth() + m, 1), mrr: base, revenue, cost, profit: revenue - cost, cash });
@@ -92,7 +92,8 @@ function Company() {
   const raw = params.get("tab");
   const tab: Tab = TABS.some((t) => t.id === raw) ? (raw as Tab) : "cockpit";
   const alerts = useAlerts();
-  const { alertState } = useStore();
+  const { alertState, fiscal } = useStore();
+  const solo = fiscal.entity === "independente";
   const pending = alerts.filter((a) => (alertState[a.key]?.status ?? "aberto") === "aberto").length;
 
   if (!can("empresa")) {
@@ -108,9 +109,20 @@ function Company() {
   return (
     <>
       <PageHead
-        title="Empresa"
-        lede="O painel de controlo da agência: metas, o que precisa de decisão agora, dinheiro real disponível e a saúde de cada cliente."
-        actions={<span className="badge"><Lock size={12} /> Só CEO</span>}
+        title={solo ? "A minha atividade" : "Empresa"}
+        lede={
+          solo
+            ? "O teu negócio em nome próprio: metas, o que precisa de decisão agora, quanto dinheiro é mesmo teu e a saúde de cada cliente."
+            : "O painel de controlo da agência: metas, o que precisa de decisão agora, dinheiro real disponível e a saúde de cada cliente."
+        }
+        actions={
+          <>
+            <button className="badge badge--info" onClick={() => router.replace("/empresa?tab=financas&perfil=1", { scroll: false })} title="Mudar o perfil fiscal">
+              {ENTITY_LABEL[fiscal.entity]} · {VAT_LABEL[fiscal.vat]}
+            </button>
+            <span className="badge"><Lock size={12} /> Só CEO</span>
+          </>
+        }
       />
       <div className="tabs" role="tablist">
         {TABS.map((t) => (
@@ -135,16 +147,20 @@ function Company() {
 }
 
 function Planning() {
-  const [view, setView] = useState<"be" | "sc">("be");
+  const [view, setView] = useState<"metas" | "be" | "sc">("metas");
+  const { fiscal } = useStore();
+  // Costs depend on the fiscal profile; remount the simulators when it changes.
+  const key = `${fiscal.entity}-${fiscal.vat}-${fiscal.ownerPay}`;
   return (
     <>
       <div className="filters">
         <div className="segmented" role="group" aria-label="Ferramenta de planeamento">
+          <button aria-pressed={view === "metas"} onClick={() => setView("metas")}>Metas</button>
           <button aria-pressed={view === "be"} onClick={() => setView("be")}>Break-even</button>
           <button aria-pressed={view === "sc"} onClick={() => setView("sc")}>Cenários a 12 meses</button>
         </div>
       </div>
-      {view === "be" ? <BreakEven /> : <Scenarios />}
+      {view === "metas" ? <Goals /> : view === "be" ? <BreakEven key={key} /> : <Scenarios key={key} />}
     </>
   );
 }
@@ -152,6 +168,7 @@ function Planning() {
 function Finances() {
   return (
     <>
+      <FiscalProfileCard />
       <div className="grid grid--main" style={{ gap: 24 }}>
         <div className="stack" style={{ gap: 12 }}>
           <FreeCash />
@@ -175,7 +192,7 @@ function FinanceHistory() {
       <SectionTitle title="Histórico" />
       <div className="kpis">
         <Kpi label="Receita recorrente (MRR)" value={money(mrr)} foot={<>{money(mrr * 12)}/ano</>} />
-        <Kpi label="Custos fixos / mês" value={money(fixedNow)} foot={`+ ${pct(FINANCE.variableRate * 100, 0)} variáveis`} />
+        <Kpi label="Custos fixos / mês" value={money(fixedTotal())} foot={`+ ${pct(FINANCE.variableRate * 100, 0)} variáveis`} />
         <Kpi
           label="Resultado médio · 3 meses"
           value={<span style={{ color: last3Profit >= 0 ? "var(--good)" : "var(--bad)" }}>{money(last3Profit)}</span>}
@@ -216,11 +233,11 @@ function FinanceHistory() {
         <div>
           <SectionTitle title="Para onde vai o dinheiro" />
           <div className="card card__body">
-            {FINANCE.fixed.map((f) => (
+            {fixedCosts().map((f) => (
               <div className="bar-row" key={f.label}>
                 <span>{f.label}</span>
-                <span className="num">{money(f.value)} <span className="faint">· {Math.round((f.value / fixedNow) * 100)}%</span></span>
-                <div className="bar-track"><div className="bar-fill" style={{ width: `${(f.value / FINANCE.fixed[0].value) * 100}%`, background: "var(--series-2)" }} /></div>
+                <span className="num">{money(f.value)} <span className="faint">· {Math.round((f.value / fixedTotal()) * 100)}%</span></span>
+                <div className="bar-track"><div className="bar-fill" style={{ width: `${(f.value / Math.max(...fixedCosts().map((x) => x.value))) * 100}%`, background: "var(--series-2)" }} /></div>
               </div>
             ))}
           </div>
@@ -233,7 +250,7 @@ function FinanceHistory() {
 /* --------------------------------------------------------------- break-even */
 
 function BreakEven() {
-  const [fixed, setFixed] = useState(fixedNow);
+  const [fixed, setFixed] = useState(fixedTotal());
   const [rate, setRate] = useState(FINANCE.variableRate * 100);
   const [fee, setFee] = useState(Math.round(avgFee / 50) * 50);
   const be = fixed / (1 - rate / 100);
@@ -288,7 +305,7 @@ function BreakEven() {
           <Slider label="Custos fixos por mês" value={fixed} min={3000} max={12000} step={50} format={money} onChange={setFixed} />
           <Slider label="Custos variáveis (% da receita)" value={rate} min={0} max={40} step={1} format={(v) => `${v}%`} onChange={setRate} />
           <Slider label="Avença média" value={fee} min={400} max={4000} step={50} format={money} onChange={setFee} />
-          <button className="btn btn--sm" onClick={() => { setFixed(fixedNow); setRate(FINANCE.variableRate * 100); setFee(Math.round(avgFee / 50) * 50); }}>
+          <button className="btn btn--sm" onClick={() => { setFixed(fixedTotal()); setRate(FINANCE.variableRate * 100); setFee(Math.round(avgFee / 50) * 50); }}>
             Repor valores atuais
           </button>
         </div>
@@ -328,7 +345,7 @@ function Scenarios() {
   };
   const rows = useMemo(() => project(s), [s]);
   const all = useMemo(() => Object.fromEntries(Object.entries(PRESETS).map(([k, v]) => [k, project(v)])), []);
-  const firstProfit = rows.find((r) => r.mrr >= (fixedNow + (s.hire ? s.hireCost : 0)) / (1 - FINANCE.variableRate));
+  const firstProfit = rows.find((r) => r.mrr >= (fixedTotal() + (s.hire ? s.hireCost : 0)) / (1 - FINANCE.variableRate));
   const minCash = Math.min(...rows.map((r) => r.cash));
   const end = rows[rows.length - 1];
 
@@ -388,7 +405,7 @@ function Scenarios() {
             </>
           )}
           <p className="faint" style={{ fontSize: 12 }}>
-            Parte de hoje: {money(mrr)} de MRR, {money(fixedNow)} de custos fixos e {money(FINANCE.cash)} em caixa.
+            Parte de hoje: {money(mrr)} de MRR, {money(fixedTotal())} de custos fixos e {money(FINANCE.cash)} em caixa.
           </p>
         </div>
       </div>
