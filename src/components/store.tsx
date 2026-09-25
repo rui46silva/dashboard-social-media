@@ -7,6 +7,7 @@ import {
   type Asset, type AuditEntry, type Client, type ClientProfile, type Notification, type NpsResponse, type Post, type PostComment,
   type Proposal, type Task, type TimeEntry,
 } from "@/lib/data";
+import { INVOICES, gross, type RuleId, type TargetId } from "@/lib/company";
 
 /**
  * Prototype data store. Everything that changes lives here so a change made in
@@ -17,6 +18,8 @@ import {
 
 type SavedClient = { base: Client; profile: ClientProfile };
 type Timer = { taskId: string; startedAt: number } | null;
+export type AlertStatus = "aberto" | "em curso" | "resolvido";
+export type AlertState = { status: AlertStatus; owner?: string; note?: string; taskId?: string; title: string; at: Date; by: string };
 
 type State = {
   posts: Post[];
@@ -32,6 +35,11 @@ type State = {
   twoFactor: Record<string, boolean>;
   enforce2FA: boolean;
   timer: Timer;
+  thresholds: Partial<Record<RuleId, number>>;
+  targets: Partial<Record<TargetId, number>>;
+  alertState: Record<string, AlertState>;
+  invoicePaid: Record<string, Date>;
+  reminders: Record<string, Date[]>;
 };
 
 type Store = State & {
@@ -59,6 +67,11 @@ type Store = State & {
   submitNps: (r: Omit<NpsResponse, "id" | "date">) => void;
   setTwoFactor: (userId: string, on: boolean) => void;
   setEnforce2FA: (on: boolean) => void;
+  setThreshold: (id: RuleId, value: number) => void;
+  setTarget: (id: TargetId, value: number) => void;
+  updateAlert: (key: string, patch: Partial<Omit<AlertState, "at" | "by" | "title">>, label: string) => void;
+  markInvoicePaid: (id: string) => void;
+  sendReminder: (id: string) => void;
   log: (action: string, target: string, who?: string) => void;
   reset: () => void;
 };
@@ -85,6 +98,11 @@ const SEED: State = {
   twoFactor: Object.fromEntries(USERS.map((u) => [u.id, u.twoFactor])),
   enforce2FA: false,
   timer: null,
+  thresholds: {},
+  targets: {},
+  alertState: {},
+  invoicePaid: {},
+  reminders: {},
 };
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -300,6 +318,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setEnforce2FA: (on) => {
       set("enforce2FA", () => on);
       log(on ? "Tornou 2FA obrigatório" : "Deixou 2FA opcional", "Toda a equipa");
+    },
+    setThreshold: (id, value) => set("thresholds", (t) => ({ ...t, [id]: value })),
+    setTarget: (id, value) => set("targets", (t) => ({ ...t, [id]: value })),
+    updateAlert: (key, patch, label) => {
+      const prev = s.alertState[key];
+      set("alertState", (m) => ({ ...m, [key]: { ...(m[key] ?? { status: "aberto" }), ...patch, title: label, at: new Date(), by: "u-rui" } }));
+      if (patch.status && patch.status !== prev?.status) log(`Alerta ${patch.status}`, label);
+    },
+    markInvoicePaid: (id) => {
+      const i = INVOICES.find((x) => x.id === id);
+      set("invoicePaid", (m) => ({ ...m, [id]: new Date() }));
+      if (i) log("Marcou fatura como paga", `${i.number} · ${getClient(i.clientId)?.name}`);
+    },
+    sendReminder: (id) => {
+      const i = INVOICES.find((x) => x.id === id);
+      if (!i) return;
+      const prof = PROFILES[i.clientId];
+      const first = contactName(i.clientId).split(" ")[0];
+      const value = `${gross(i).toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+      set("reminders", (m) => ({ ...m, [id]: [...(m[id] ?? []), new Date()] }));
+      set("notifications", (n) => [
+        {
+          id: uid("nt"), channel: "email", clientId: i.clientId, postIds: [], to: prof?.contact.email ?? "",
+          subject: `Lembrete: fatura ${i.number}`,
+          body: `Olá ${first},\n\nA fatura ${i.number} (${i.description}), no valor de ${value}, venceu a ${i.due.toLocaleDateString("pt-PT")}. Podes confirmar-nos a data de pagamento?\n\nObrigado!`,
+          sentAt: new Date(), status: "enviada",
+        },
+        ...n,
+      ]);
+      log("Enviou lembrete de pagamento", `${i.number} · ${getClient(i.clientId)?.name}`);
     },
     log,
     reset: () => {

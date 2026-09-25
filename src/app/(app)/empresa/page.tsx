@@ -1,17 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { AlertTriangle, Lock, ShieldCheck, Target, TrendingDown, TrendingUp, Users } from "lucide-react";
+import { Suspense, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Lock, ShieldCheck } from "lucide-react";
 import { CLIENT_ECONOMICS, DEALS, FINANCE, FIN_MONTHS, NOW, client } from "@/lib/data";
 import { money, pct } from "@/lib/format";
 import { LineChart } from "@/components/charts";
 import { ClientTile, Kpi, PageHead, SectionTitle } from "@/components/ui";
 import { useSession } from "@/components/session";
 import { useStore } from "@/components/store";
+import { Cockpit, useAlerts } from "@/components/company/cockpit";
+import { FiscalCalendar, FreeCash, Receivables } from "@/components/company/finance";
+import { HealthBoard } from "@/components/company/health";
 
-const TABS = ["Visão geral", "Break-even", "Cenários", "Rentabilidade por cliente"] as const;
-type Tab = (typeof TABS)[number];
+const TABS = [
+  { id: "cockpit", label: "Cockpit" },
+  { id: "financas", label: "Finanças" },
+  { id: "clientes", label: "Clientes" },
+  { id: "planeamento", label: "Planeamento" },
+] as const;
+type Tab = (typeof TABS)[number]["id"];
 const MONTHS_SHORT = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 const mLabel = (d: Date) => `${MONTHS_SHORT[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`;
 
@@ -69,8 +78,22 @@ function project(s: Scenario) {
 }
 
 export default function CompanyPage() {
+  return (
+    <Suspense>
+      <Company />
+    </Suspense>
+  );
+}
+
+function Company() {
   const { can } = useSession();
-  const [tab, setTab] = useState<Tab>("Visão geral");
+  const params = useSearchParams();
+  const router = useRouter();
+  const raw = params.get("tab");
+  const tab: Tab = TABS.some((t) => t.id === raw) ? (raw as Tab) : "cockpit";
+  const alerts = useAlerts();
+  const { alertState } = useStore();
+  const pending = alerts.filter((a) => (alertState[a.key]?.status ?? "aberto") === "aberto").length;
 
   if (!can("empresa")) {
     return (
@@ -86,55 +109,70 @@ export default function CompanyPage() {
     <>
       <PageHead
         title="Empresa"
-        lede="A saúde da agência em números: quanto entra, quanto custa, quando se paga a si própria e o que acontece se mudarmos alguma coisa."
+        lede="O painel de controlo da agência: metas, o que precisa de decisão agora, dinheiro real disponível e a saúde de cada cliente."
         actions={<span className="badge"><Lock size={12} /> Só CEO</span>}
       />
       <div className="tabs" role="tablist">
         {TABS.map((t) => (
-          <button key={t} role="tab" className="tab" aria-selected={tab === t} onClick={() => setTab(t)}>{t}</button>
+          <button key={t.id} role="tab" className="tab" aria-selected={tab === t.id} onClick={() => router.replace(`/empresa?tab=${t.id}`, { scroll: false })}>
+            {t.label}
+            {t.id === "cockpit" && pending > 0 && <span className="badge-count">{pending}</span>}
+          </button>
         ))}
       </div>
-      {tab === "Visão geral" && <Overview />}
-      {tab === "Break-even" && <BreakEven />}
-      {tab === "Cenários" && <Scenarios />}
-      {tab === "Rentabilidade por cliente" && <Profitability />}
+      {tab === "cockpit" && <Cockpit />}
+      {tab === "financas" && <Finances />}
+      {tab === "clientes" && (
+        <>
+          <HealthBoard />
+          <SectionTitle title="Rentabilidade por cliente" />
+          <Profitability />
+        </>
+      )}
+      {tab === "planeamento" && <Planning />}
+    </>
+  );
+}
+
+function Planning() {
+  const [view, setView] = useState<"be" | "sc">("be");
+  return (
+    <>
+      <div className="filters">
+        <div className="segmented" role="group" aria-label="Ferramenta de planeamento">
+          <button aria-pressed={view === "be"} onClick={() => setView("be")}>Break-even</button>
+          <button aria-pressed={view === "sc"} onClick={() => setView("sc")}>Cenários a 12 meses</button>
+        </div>
+      </div>
+      {view === "be" ? <BreakEven /> : <Scenarios />}
+    </>
+  );
+}
+
+function Finances() {
+  return (
+    <>
+      <div className="grid grid--main" style={{ gap: 24 }}>
+        <div className="stack" style={{ gap: 12 }}>
+          <FreeCash />
+          <Receivables />
+        </div>
+        <div>
+          <FiscalCalendar />
+        </div>
+      </div>
+      <FinanceHistory />
     </>
   );
 }
 
 /* ---------------------------------------------------------------- overview */
 
-function Overview() {
+function FinanceHistory() {
   const burn = last3Profit < 0 ? -last3Profit : 0;
-  const insights: { tone: "bad" | "warn" | "good" | "info"; icon: typeof AlertTriangle; title: string; text: string; href?: string }[] = [];
-  if (recurringProfit < 0)
-    insights.push({
-      tone: "bad", icon: TrendingDown, title: "As avenças ainda não pagam a estrutura",
-      text: `Só com receita recorrente faltam ${money(breakEven - mrr)}/mês para o break-even. Os projetos pontuais estão a tapar o buraco — e são imprevisíveis.`,
-    });
-  if (concentration > 0.3)
-    insights.push({
-      tone: "warn", icon: AlertTriangle, title: `${pct(concentration * 100, 0)} da receita vem de um só cliente`,
-      text: `Se a ${client(top.clientId)!.name} sair, a receita recorrente cai para ${money(mrr - top.fee)}. Acima de 30% é risco de concentração.`,
-    });
-  if (renewals.length)
-    insights.push({
-      tone: "warn", icon: Users, title: `${renewals.length} contratos renovam nos próximos 90 dias`,
-      text: `${renewals.map((r) => client(r.clientId)!.name).join(" e ")} — ${money(atRisk)}/mês (${pct((atRisk / mrr) * 100, 0)} da receita recorrente). Marcar reuniões de renovação já.`,
-    });
-  const worst = [...econ].sort((a, b) => a.marginPct - b.marginPct)[0];
-  if (worst.marginPct < 0.2)
-    insights.push({
-      tone: "warn", icon: Target, title: `${client(worst.clientId)!.name} tem margem de ${pct(worst.marginPct * 100, 0)}`,
-      text: `A avença paga ${money(worst.perHour)}/hora de trabalho, contra um custo interno de ${money(FINANCE.hourCost)}/h. Rever preço ou âmbito na renovação.`,
-    });
-  insights.push({
-    tone: "good", icon: TrendingUp, title: `Pipeline ponderado: +${money(weightedPipeline)}/mês`,
-    text: `Se o pipeline converter como esperado, a receita recorrente passa o break-even (${money(breakEven)}).`,
-  });
-
   return (
     <>
+      <SectionTitle title="Histórico" />
       <div className="kpis">
         <Kpi label="Receita recorrente (MRR)" value={money(mrr)} foot={<>{money(mrr * 12)}/ano</>} />
         <Kpi label="Custos fixos / mês" value={money(fixedNow)} foot={`+ ${pct(FINANCE.variableRate * 100, 0)} variáveis`} />
@@ -176,18 +214,6 @@ function Overview() {
           </div>
         </div>
         <div>
-          <SectionTitle title="O que merece atenção" />
-          <div className="list">
-            {insights.map((i) => (
-              <div key={i.title} className="insight">
-                <span className={`insight__icon insight__icon--${i.tone}`}><i.icon size={16} /></span>
-                <div>
-                  <div style={{ fontWeight: 600 }}>{i.title}</div>
-                  <div className="muted" style={{ fontSize: 13, marginTop: 2 }}>{i.text}</div>
-                </div>
-              </div>
-            ))}
-          </div>
           <SectionTitle title="Para onde vai o dinheiro" />
           <div className="card card__body">
             {FINANCE.fixed.map((f) => (
